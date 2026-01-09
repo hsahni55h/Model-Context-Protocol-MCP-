@@ -46,9 +46,8 @@ The Dockerfile performs the following steps:
   ]
 }
 
----
 
-## Argument Breakdown
+Argument Breakdown
 docker run
 
 Starts a new container.
@@ -81,10 +80,15 @@ The Docker image name.
 
 
 
----
-
-## Building the Docker Image
+Building the Docker Image
 
 Run this command from the folder containing the Dockerfile:
 
 docker build -t terminal_server_docker .
+
+This creates a Docker image named:
+
+terminal_server_docker
+
+
+
