@@ -46,6 +46,7 @@ The Dockerfile performs the following steps:
   ]
 }
 
+---
 
 ## Argument Breakdown
 docker run
@@ -78,6 +79,9 @@ terminal_server_docker
 
 The Docker image name.
 
+
+
+---
 
 ## Building the Docker Image
 
