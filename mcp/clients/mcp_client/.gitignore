@@ -1,13 +1,44 @@
-# Python-generated files
+# ================================
+# Python cache & compiled files
+# ================================
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
+
+# ================================
+# Build / distribution artifacts
+# ================================
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ================================
+# Virtual environments
+# ================================
+.venv/
+venv/
+env/
+ENV/
+
+# ================================
+# Environment variable files
+# ================================
+.env
+.env.*
+!.env.example
+
+# ================================
+# macOS system files
+# ================================
 .DS_Store
 
-# Virtual environments
-.venv
-
-.env
+# ================================
+# IDE / Editor files (optional)
+# ================================
+.vscode/
+.idea/
+*.swp
+*.swo
