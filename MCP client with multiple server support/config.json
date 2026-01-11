@@ -1,0 +1,30 @@
+{
+    "preferences": {},
+    "mcpServers": {
+      "terminal_docker": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "--rm",
+          "--init",
+          "-e",
+          "DOCKER_CONTAINER=true",
+          "-v",
+          "/Users/himanshu/github_himanshu/Model-Context-Protocol-MCP-/mcp/workspace:/root/mcp/workspace",
+          "terminal_server_docker"
+        ]
+      },
+      "fetch": {
+            "command": "docker",
+            "args": [
+                "run",
+                "-i",
+                "--rm",
+                "mcp_fetch_server_test"
+            ]
+        }
+    }
+  }
+  
+  
