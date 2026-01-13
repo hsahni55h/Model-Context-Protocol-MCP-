@@ -1,0 +1,14 @@
+[project]
+name = "job-recommender-tool"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "apify-client>=2.4.0",
+    "mcp[cli]>=1.25.0",
+    "openai>=2.15.0",
+    "pymupdf>=1.26.7",
+    "python-dotenv>=1.2.1",
+    "streamlit>=1.52.2",
+]
