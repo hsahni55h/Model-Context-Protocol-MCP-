@@ -29,24 +29,6 @@ StoryForge takes a **topic** and turns it into a **professional video script** b
 
 ---
 
-## 🔁 High-Level Flow Diagram
-
-```mermaid
-flowchart LR
-    A[Content Creator] --> B[Topic]
-    B --> C[LLM]
-    C -->|get_realtime_info| D[Internet]
-    D --> C
-    C --> E[LLM]
-    E -->|generate_video_transcription| F[Video Script]
-    F --> G[Higgsfield.ai / Video Platform]
-
-    P1[Prompts] --> C
-    P2[Prompts] --> E
-
-
----
-
 ## 🔄 How the Workflow Operates
 
 1. **User provides a topic**
@@ -75,7 +57,25 @@ StoryForge uses MCP to:
 - Connect LLMs with external tools  
 - Pass structured context between steps  
 
+
 ---
+
+## 🔁 High-Level Flow Diagram
+
+```mermaid
+flowchart LR
+    A[Content Creator] --> B[Topic]
+    B --> C[LLM]
+    C -->|get_realtime_info| D[Internet]
+    D --> C
+    C --> E[LLM]
+    E -->|generate_video_transcription| F[Video Script]
+    F --> G[Higgsfield.ai / Video Platform]
+
+    P1[Prompts] --> C
+    P2[Prompts] --> E
+
+
 
 
 
