@@ -5,7 +5,7 @@ import uvicorn
 from functions.symptoms_extractor import extract_symptoms
 from functions.diagnose_symptoms import get_diagnosis
 from functions.pubmed_articles import fetch_pubmed_articles_with_metadata
-from functions.summarize_pubmed import summarize_text  # adjust if your filename differs
+from functions.summarize_pubmed import summarize_text  
 
 app = FastAPI(title="Clinisight AI", version="0.1")
 
