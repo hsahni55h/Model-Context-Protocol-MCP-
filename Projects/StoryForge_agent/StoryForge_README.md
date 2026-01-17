@@ -64,19 +64,22 @@ StoryForge uses MCP to:
 
 ```mermaid
 flowchart LR
-    %% Left-to-right main pipeline
-    CC((Content Creator)) --> T{Topic} --> L1([LLM])
+    CC((Content Creator)) --> T{Topic}
 
-    %% Realtime info tool call to Internet (two-way)
-    L1 <-->|get_realtime_info| NET((Internet))
+    %% First LLM + Tool
+    T --> L1([LLM])
+    L1 -->|get_realtime_info| NET((Internet))
+    NET --> L1
 
-    %% Second stage generation
+    %% Prompts to first LLM
+    P1[/Prompts/] --> L1
+
+    %% Second LLM + Tool
     L1 --> L2([LLM])
-    P1[/prompts/] --> L1
-    P2[/prompts/] --> L2
-    L2 --> VS{Video Script}
+    P2[/Prompts/] --> L2
+    L2 -->|generate_video_transcription| VS{Video Script}
 
-    %% Output stage (vertical drop like the sketch)
+    %% Final output
     VS --> H[Higgsfield.ai]
 
 
