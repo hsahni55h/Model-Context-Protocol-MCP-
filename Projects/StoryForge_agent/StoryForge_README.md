@@ -43,6 +43,29 @@ StoryForge takes a **topic** and turns it into a **professional video script** b
 
 ---
 
+
+## 🔌 MCP Tools Exposed by StoryForge
+
+StoryForge Agent exposes two MCP tools that power the entire workflow:
+
+### get_realtime_info
+
+Fetches **up-to-date information** about a topic using Tavily and summarizes it using OpenAI.
+
+
+### generate_video_transcription
+
+Uses real-time information to generate an engaging short-form video script.
+
+### Testing the MCP Tools
+
+To test the StoryForge MCP tools using the MCP Inspector:
+
+uv run mcp dev mcp_server.py
+
+
+---
+
 ## 🧩 Role of MCP (Multi-Context Processing)
 
 MCP enables:

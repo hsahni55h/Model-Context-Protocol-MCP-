@@ -3,3 +3,4 @@ python-dotenv
 google-generativeai
 pandas
 tavily-python
+openai
