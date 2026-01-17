@@ -29,11 +29,10 @@ StoryForge takes a **topic** and turns it into a **professional video script** b
 
 ---
 
-### 🔁 High-Level Flow Diagram
+## 🔁 High-Level Flow Diagram
 
 ```mermaid
 flowchart LR
-
     A[Content Creator] --> B[Topic]
     B --> C[LLM]
     C -->|get_realtime_info| D[Internet]
@@ -44,6 +43,7 @@ flowchart LR
 
     P1[Prompts] --> C
     P2[Prompts] --> E
+
 
 ---
 
