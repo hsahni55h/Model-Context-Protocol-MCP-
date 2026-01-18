@@ -125,3 +125,13 @@ Weather MCP server
 - Runs on a server
 - Can serve many clients
 - Used for production setup
+
+### Testing MCP Servers
+To test any MCP server in this repository:
+
+> **“ uv run mcp dev mcp_server.py”**
+
+This opens the MCP Inspector, where you can:
+- Call tools
+- View inputs/outputs
+- Debug workflows
