@@ -126,6 +126,8 @@ Weather MCP server
 - Can serve many clients
 - Used for production setup
 
+---
+
 ### Testing MCP Servers
 To test any MCP server in this repository:
 
