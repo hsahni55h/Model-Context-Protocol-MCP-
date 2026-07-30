@@ -11,7 +11,7 @@ This folder shows a **much simpler approach** using **LangChain MCP Adapters**. 
 | Aspect | 01-mcp-basics (raw SDK) | 02-langchain-adapters |
 |--------|------------------------|-----------------------|
 | Tool conversion | Manual `convert_mcp_tools_to_openai()` | `load_mcp_tools(session)` — one line |
-| Agentic loop | Manual while loop checking for tool calls | `create_react_agent()` handles everything |
+| Agentic loop | Manual while loop checking for tool calls | `create_agent()` handles everything |
 | Tool execution | Manual `session.call_tool()` + result parsing | Agent calls tools automatically |
 | Lines of code | ~240 lines | ~80 lines |
 
@@ -25,7 +25,7 @@ User query → LangChain React Agent → (tool call?) → MCP Server → Agent �
 
 1. Connect to the MCP server via STDIO
 2. `load_mcp_tools(session)` — discovers and converts MCP tools to LangChain format
-3. `create_react_agent(llm, tools)` — creates an agent that can reason and call tools
+3. `create_agent(llm, tools)` — creates an agent that can reason and call tools
 4. `agent.ainvoke({"messages": query})` — runs the full reasoning + tool execution loop
 
 ---
@@ -87,7 +87,7 @@ Query: quit
 | Component | What it does |
 |-----------|-------------|
 | `load_mcp_tools(session)` | Discovers MCP tools and converts them to LangChain-compatible tools |
-| `create_react_agent(llm, tools)` | Creates a ReAct agent that reasons, acts, observes in a loop |
+| `create_agent(llm, tools)` | Creates a ReAct agent that reasons, acts, observes in a loop |
 | `agent.ainvoke({"messages": query})` | Runs the agent — handles tool calls automatically |
 | `ChatOpenAI` | LangChain wrapper for OpenAI models |
 

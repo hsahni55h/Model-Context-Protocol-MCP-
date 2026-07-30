@@ -35,7 +35,7 @@ from mcp.client.stdio import stdio_client            # For connecting to the MCP
 # Agent and LLM Imports
 # ---------------------------
 from langchain_mcp_adapters.tools import load_mcp_tools  # Adapter to load MCP tools correctly
-from langgraph.prebuilt import create_react_agent        # Prebuilt React agent from LangGraph
+from langchain.agents import create_agent                 # Prebuilt React agent from LangChain
 from langchain_google_genai import ChatGoogleGenerativeAI  # Google Gemini LLM wrapper
 
 # ---------------------------
@@ -116,7 +116,7 @@ async def run_agent():
             # Load MCP tools using the adapter; this handles awaiting and conversion.
             tools = await load_mcp_tools(session)
             # Create a React agent using the LLM and the loaded tools.
-            agent = create_react_agent(llm, tools)
+            agent = create_agent(llm, tools)
             print("MCP Client Started! Type 'quit' to exit.")
             while True:
                 query = input("\nQuery: ").strip()
