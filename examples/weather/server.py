@@ -91,7 +91,7 @@ def compare_weather(city1: str, city2: str) -> str:
 
 # --- Resources ---
 
-FAVORITE_CITIES = ["London", "New York", "Tokyo", "Paris", "Sydney"]
+FAVORITE_CITIES = ["Paris", "Sydney", "Gothenburg", "Stockholm", "Copenhagen", "Zurich"]
 
 
 @mcp.resource("weather://favorites")
