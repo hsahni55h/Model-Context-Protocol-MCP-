@@ -1,0 +1,55 @@
+[project]
+name = "mcp-learning"
+version = "0.1.0"
+description = "MCP (Model Context Protocol) learning repository and projects"
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Core deps — needed for basic MCP server/client work
+dependencies = [
+    "mcp[cli]>=1.25.0,<2.0.0",
+    "openai>=2.14.0",
+    "python-dotenv>=1.2.1",
+]
+
+[project.optional-dependencies]
+# LangChain adapter pattern (learning/02, 03)
+langchain = [
+    "langchain>=1.2.3",
+    "langchain-openai>=1.1.7",
+    "langchain-mcp-adapters>=0.2.1",
+    "langgraph>=1.0.5",
+]
+
+# SSE transport (learning/05)
+sse = [
+    "starlette>=0.52.1",
+    "uvicorn>=0.40.0",
+]
+
+# Clinisight medical research agent
+clinisight = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.40.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "requests>=2.31.0",
+]
+
+# StoryForge content agent
+storyforge = [
+    "streamlit>=1.30.0",
+    "tavily-python>=0.5.0",
+]
+
+# Job recommender tool
+jobs = [
+    "streamlit>=1.30.0",
+    "apify-client>=1.6.0",
+    "pymupdf>=1.24.0",
+]
+
+# Install everything
+all = [
+    "mcp-learning[langchain,sse,clinisight,storyforge,jobs]",
+]
