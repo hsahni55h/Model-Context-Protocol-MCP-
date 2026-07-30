@@ -4,9 +4,12 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("terminal")
 
-# repo_root/mcp/servers/terminal_server/this_file.py  -> go up to repo_root/mcp
-MCP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DEFAULT_WORKSPACE = os.path.join(MCP_DIR, "workspace")
+# Inside Docker: use /workspace as the sandbox directory
+# Outside Docker: use a workspace/ folder next to this script
+if os.getenv("DOCKER_CONTAINER"):
+    DEFAULT_WORKSPACE = "/workspace"
+else:
+    DEFAULT_WORKSPACE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspace")
 
 os.makedirs(DEFAULT_WORKSPACE, exist_ok=True)
 

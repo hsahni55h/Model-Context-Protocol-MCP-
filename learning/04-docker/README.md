@@ -1,94 +1,122 @@
-# Python Container + MCP Stdio Integration
+## Dockerized MCP Server
 
-This folder contains a **Dockerized version of a terminal server** that integrates with MCP using **standard input/output (stdio)**.
-
-The goal of this setup is to run the terminal server inside a **Docker container** while keeping file operations synced with your local machine.
+This folder shows how to run an MCP server **inside a Docker container**. The server communicates via STDIO (same as [01-mcp-basics](../01-mcp-basics/)), but runs in an isolated container instead of on your host machine.
 
 ---
 
-## How It Works
+### Why Docker?
 
-- The terminal server runs **inside a Docker container**
-- Your local folder `mcp/workspace` is **mounted into the container**
-- Any files created inside the container are written to the mounted workspace
-- These files immediately appear on your host machine
-
-
-## Dockerfile Overview
-
-The Dockerfile performs the following steps:
-
-1. Uses the **Python 3.11 slim** base image  
-2. Sets `/app` as the container working directory  
-3. Copies the terminal server code into the container  
-4. Installs dependencies from `requirements.txt`  
-5. Exposes port `5000`  
-   - (Only relevant if your server actually listens on a network port)  
-6. Runs `terminal_server.py` when the container starts  
+| Benefit | Details |
+|---------|---------|
+| **Isolation** | Commands run inside the container, not on your host |
+| **Portability** | Anyone with Docker can run your server — no Python setup needed |
+| **Safety** | Container is destroyed after each session (`--rm`) |
+| **Volume mounting** | Workspace files are synced between container and host |
 
 ---
 
-## MCP Docker Configuration
+### How It Works
+
+```
+Cursor/Client → STDIO → Docker container → terminal_server.py → /workspace
+                                                                     ↕
+                                                           Host folder (mounted)
+```
+
+- The MCP client (Cursor, or a Python client) launches Docker instead of Python directly
+- Docker starts the container, which runs `terminal_server.py`
+- STDIO is used for communication (`-i` flag keeps stdin open)
+- The host's workspace folder is mounted into the container with `-v`
+
+---
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `terminal_server.py` | The MCP server (same `run_command` tool, but workspace-aware for Docker) |
+| `Dockerfile` | Builds the container image with Python + MCP SDK |
+
+---
+
+### How to Run
+
+> All commands run from the **repo root**.
+
+#### 1. Build the Docker image
+
+```bash
+docker build -t terminal_server_docker learning/04-docker/
+```
+
+#### 2. Test it manually (verify the container works)
+
+```bash
+docker run -i --rm --init \
+  -e DOCKER_CONTAINER=true \
+  -v "$(pwd)/learning/01-mcp-basics/workspace:/workspace" \
+  terminal_server_docker
+```
+
+This starts the server in STDIO mode inside the container. You won't see output (it's waiting for MCP protocol messages). Press `Ctrl+C` to stop.
+
+#### 3. Test with MCP Inspector
+
+```bash
+uv run mcp dev learning/04-docker/terminal_server.py
+```
+
+This runs the server **locally** (not in Docker) using the Inspector — useful for verifying the tool works before containerizing.
+
+#### 4. Use with Cursor
+
+Add this to Cursor → Settings → MCP:
 
 ```json
-"terminal_docker": {
-  "command": "docker",
-  "args": [
-    "run",
-    "-i",
-    "--rm",
-    "--init",
-    "-e",
-    "DOCKER_CONTAINER=true",
-    "-v",
-    "/Users/himanshu/github_himanshu/Model-Context-Protocol-MCP-/mcp/workspace:/root/mcp/workspace",
-    "terminal_server_docker"
-  ]
+{
+  "mcpServers": {
+    "terminal_docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "-e",
+        "DOCKER_CONTAINER=true",
+        "-v",
+        "<ABSOLUTE_PATH_TO_REPO>/learning/01-mcp-basics/workspace:/workspace",
+        "terminal_server_docker"
+      ]
+    }
+  }
 }
+```
 
+> Replace `<ABSOLUTE_PATH_TO_REPO>` with the actual path to your cloned repository.
 
-Argument Breakdown
-docker run
+Now when Cursor calls the `run_command` tool, it runs inside Docker, and any files created appear in your local `workspace/` folder.
 
-Starts a new container.
+---
 
--i
+### Key Differences from 01-mcp-basics
 
-Runs the container in interactive mode (stdin stays open).
-Required for MCP stdio communication.
+| Aspect | 01-mcp-basics | 04-docker |
+|--------|--------------|-----------|
+| Server runs on | Host machine (Python) | Docker container |
+| Client launches | `python terminal_server.py` | `docker run ... terminal_server_docker` |
+| Workspace | Local folder | Mounted volume (`-v`) |
+| Dependencies | Installed via `uv sync` | Baked into Docker image |
+| Isolation | Process-level | Container-level |
 
---rm
+---
 
-Automatically deletes the container when it exits.
+### Docker Args Explained
 
---init
-
-Adds a minimal init process for better signal handling and cleanup.
-
--e DOCKER_CONTAINER=true
-
-Sets an environment variable inside the container.
-Useful for conditional logic in your code.
-
--v <host_path>:<container_path>
-
-Mounts your local workspace into the container.
-
-terminal_server_docker
-
-The Docker image name.
-
-
-
-Building the Docker Image
-
-Run this command from the folder containing the Dockerfile:
-
-docker build -t terminal_server_docker .
-
-This creates a Docker image named:
-
-terminal_server_docker
-
-
-
+| Arg | Purpose |
+|-----|---------|
+| `-i` | Interactive mode — keeps stdin open for MCP STDIO |
+| `--rm` | Auto-delete container when it exits |
+| `--init` | Adds init process for clean signal handling |
+| `-e DOCKER_CONTAINER=true` | Env var so the server uses `/workspace` inside the container |
+| `-v host:container` | Mounts local workspace into the container |
