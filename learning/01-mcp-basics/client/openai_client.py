@@ -224,7 +224,7 @@ def convert_mcp_tools_to_openai(mcp_tools):
 async def main():
     """Main function to start the MCP client."""
     if len(sys.argv) < 2:
-        print("Usage: python gemini_client.py <path_to_server_script>")
+        print("Usage: python openai_client.py <path_to_server_script>")
         sys.exit(1)
 
     client = MCPClient()

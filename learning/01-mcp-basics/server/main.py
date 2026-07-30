@@ -4,9 +4,9 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("terminal")
 
-# repo_root/mcp/servers/terminal_server/this_file.py  -> go up to repo_root/mcp
-MCP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DEFAULT_WORKSPACE = os.path.join(MCP_DIR, "workspace")
+# Workspace lives alongside the server folder: learning/01-mcp-basics/workspace/
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DEFAULT_WORKSPACE = os.path.join(BASE_DIR, "workspace")
 
 os.makedirs(DEFAULT_WORKSPACE, exist_ok=True)
 

@@ -1,27 +1,76 @@
-## Purpose of This Client
+# MCP Client (OpenAI)
 
-This Python client connects to an **MCP (Model Context Protocol) server** and allows an **OpenAI model** to:
-
-- Understand user requests  
-- Decide when a tool (function) should be called  
-- Execute MCP tools (such as terminal commands)  
-- Use the tool results to generate a final response  
-
-### In Simple Terms
-
-User → OpenAI → (Tool call if needed) → MCP Server → OpenAI → Final Answer
-
+This Python client connects to an **MCP server** over STDIO and lets **OpenAI (gpt-4o-mini)** use the server's tools via function calling.
 
 ---
 
-## High-Level Flow
+## How It Works
 
-1. The user types a query  
-2. The client sends the query and tool definitions to OpenAI  
-3. OpenAI may request a tool call  
-4. The client executes the tool via MCP  
-5. The tool output is sent back to OpenAI  
-6. OpenAI generates the final response  
-7. The client prints the response  
+```
+User query → OpenAI → (tool call?) → MCP Server → OpenAI → Final answer
+```
 
-This process repeats until no more tool calls are needed.
+1. User types a query
+2. Client sends the query + available tool definitions to OpenAI
+3. OpenAI decides whether to call a tool
+4. If yes → client executes the tool via MCP and sends the result back
+5. OpenAI generates the final response (may call more tools in a loop)
+6. Client prints the response
+
+---
+
+## How to Run
+
+> All commands are run from the **repo root**. Requires `OPENAI_API_KEY` in your `.env` file.
+
+### Run the client (connects to the terminal server)
+
+```bash
+uv run python learning/01-mcp-basics/client/openai_client.py learning/01-mcp-basics/server/main.py
+```
+
+This starts an interactive chat. Type `quit` to exit.
+
+### Example Session
+
+```
+MCP Client Started! Type 'quit' to exit.
+
+Query: What files are in the workspace?
+
+[OpenAI requested tool call: run_command args={'command': 'ls'}]
+
+The workspace is currently empty.
+
+Query: Create a file called notes.txt with "MCP is working"
+
+[OpenAI requested tool call: run_command args={'command': 'echo "MCP is working" > notes.txt'}]
+
+Done! I've created notes.txt with the content "MCP is working".
+
+Query: What's in notes.txt?
+
+[OpenAI requested tool call: run_command args={'command': 'cat notes.txt'}]
+
+The file contains: MCP is working
+
+Query: quit
+```
+
+---
+
+## Key Code Concepts
+
+| Concept | What it does |
+|---------|-------------|
+| `StdioServerParameters` | Configures how to launch the MCP server process |
+| `ClientSession` | Manages the connection to the MCP server |
+| `convert_mcp_tools_to_openai()` | Converts MCP tool schemas to OpenAI function calling format |
+| `session.call_tool()` | Executes a tool on the MCP server |
+| Agentic loop | Keeps calling tools until OpenAI returns a text response (no more tool calls) |
+
+---
+
+## Gemini Client
+
+`gemini_client.py` is also included for reference. It does the same thing but uses **Google Gemini** instead of OpenAI. Requires a `GEMINI_API_KEY` in your `.env` file.
