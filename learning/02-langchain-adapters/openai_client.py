@@ -74,7 +74,7 @@ llm = ChatOpenAI(
 # MCP Server Script Argument
 # ---------------------------
 if len(sys.argv) < 2:
-    print("Usage: python langchain_mcp_client_openai.py <path_to_server_script>")
+    print("Usage: python openai_client.py <path_to_server_script>")
     sys.exit(1)
 server_script = sys.argv[1]
 
@@ -83,7 +83,7 @@ server_script = sys.argv[1]
 # ---------------------------
 # Configure parameters to launch the MCP server.
 server_params = StdioServerParameters(
-    command="python" if server_script.endswith(".py") else "node",
+    command=sys.executable if server_script.endswith(".py") else "node",
     args=[server_script],
 )
 

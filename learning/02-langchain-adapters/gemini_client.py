@@ -74,7 +74,7 @@ llm = ChatGoogleGenerativeAI(
 # MCP Server Script Argument
 # ---------------------------
 if len(sys.argv) < 2:
-    print("Usage: python client_langchain_google_genai_bind_tools.py <path_to_server_script>")
+    print("Usage: python gemini_client.py <path_to_server_script>")
     sys.exit(1)
 server_script = sys.argv[1]
 

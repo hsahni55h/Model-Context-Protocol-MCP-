@@ -1,92 +1,107 @@
-## LangChain + MCP + OpenAI Integration
+## LangChain MCP Adapters
 
-This client uses **LangChain** and **LangGraph** to connect an **OpenAI model** with an **MCP (Model Context Protocol) server**.
+In [01-mcp-basics](../01-mcp-basics/) we built a custom MCP client from scratch — manually converting tool schemas, handling function calls, and managing the agentic loop.
 
-The goal is to allow the AI model to **automatically discover and use MCP tools** (such as terminal commands) when needed.
-
----
-
-### What We Are Doing
-
-1. We start an MCP server using a stdio connection  
-2. We load all available MCP tools using the LangChain MCP adapter  
-3. We create a React-style agent using:
-   - An OpenAI model (via `ChatOpenAI`)
-   - The loaded MCP tools  
-4. The agent can now:
-   - Understand user queries  
-   - Decide when a tool is needed  
-   - Call MCP tools automatically  
-   - Use the tool output to generate a final response  
+This folder shows a **much simpler approach** using **LangChain MCP Adapters**. The adapter handles all the glue code for us.
 
 ---
 
-### Why LangChain MCP Adapters Are Used
+### What Changed vs 01-mcp-basics
 
-We use the **LangChain MCP Adapters** to convert MCP tools into LangChain-compatible tools.
+| Aspect | 01-mcp-basics (raw SDK) | 02-langchain-adapters |
+|--------|------------------------|-----------------------|
+| Tool conversion | Manual `convert_mcp_tools_to_openai()` | `load_mcp_tools(session)` — one line |
+| Agentic loop | Manual while loop checking for tool calls | `create_react_agent()` handles everything |
+| Tool execution | Manual `session.call_tool()` + result parsing | Agent calls tools automatically |
+| Lines of code | ~240 lines | ~80 lines |
 
-This allows the React agent to call MCP tools without any custom glue code.
+---
 
-Repository used:
+### How It Works
 
-https://github.com/langchain-ai/langchain-mcp-adapters
+```
+User query → LangChain React Agent → (tool call?) → MCP Server → Agent → Final answer
+```
 
-The adapter handles:
-- Tool discovery from the MCP server  
-- Argument schema conversion  
-- Tool invocation via the MCP session  
+1. Connect to the MCP server via STDIO
+2. `load_mcp_tools(session)` — discovers and converts MCP tools to LangChain format
+3. `create_react_agent(llm, tools)` — creates an agent that can reason and call tools
+4. `agent.ainvoke({"messages": query})` — runs the full reasoning + tool execution loop
 
+---
+
+### How to Run
+
+> All commands run from the **repo root**. Requires `OPENAI_API_KEY` in your `.env` file.
+
+#### Install langchain dependencies
+
+```bash
+uv sync --extra langchain
+```
+
+#### Run the client (connects to the terminal server from 01-mcp-basics)
+
+```bash
+uv run python learning/02-langchain-adapters/openai_client.py learning/01-mcp-basics/server/main.py
+```
+
+#### Example Session
+
+```
+MCP Client Started! Type 'quit' to exit.
+
+Query: List files in the workspace
+
+Response:
+{
+  "messages": [
+    {"type": "HumanMessage", "content": "List files in the workspace"},
+    {"type": "AIMessage", "content": ""},
+    {"type": "ToolMessage", "content": "..."},
+    {"type": "AIMessage", "content": "The workspace is currently empty."}
+  ]
+}
+
+Query: Create a file called demo.txt with "LangChain + MCP"
+
+Response:
+{
+  "messages": [
+    {"type": "HumanMessage", "content": "Create a file called demo.txt with \"LangChain + MCP\""},
+    {"type": "AIMessage", "content": ""},
+    {"type": "ToolMessage", "content": ""},
+    {"type": "AIMessage", "content": "Done! I created demo.txt with the content \"LangChain + MCP\"."}
+  ]
+}
+
+Query: quit
+```
+
+> Note: The response is the full LangGraph message history (JSON), not just the final text. The last `AIMessage` contains the final answer.
 
 ---
 
 ### Key Components
 
-- **ChatOpenAI**  
-  OpenAI model wrapper used by LangChain.
-
-- **load_mcp_tools(session)**  
-  Loads MCP tools and converts them into LangChain tools.
-
-- **create_react_agent(llm, tools)**  
-  Creates a React agent that can reason and call tools.
-
-- **agent.ainvoke(...)**  
-  Runs the full reasoning + tool execution loop.
+| Component | What it does |
+|-----------|-------------|
+| `load_mcp_tools(session)` | Discovers MCP tools and converts them to LangChain-compatible tools |
+| `create_react_agent(llm, tools)` | Creates a ReAct agent that reasons, acts, observes in a loop |
+| `agent.ainvoke({"messages": query})` | Runs the agent — handles tool calls automatically |
+| `ChatOpenAI` | LangChain wrapper for OpenAI models |
 
 ---
 
-### Result
+### Why Use LangChain with MCP
 
-This setup allows the AI to:
-
-- Execute terminal commands  
-- Interact with MCP tools  
-- Use tool results in its responses  
-- Operate in a controlled environment  
+- **No manual tool format conversion** — adapters handle it automatically
+- **No manual agentic loop** — the ReAct agent decides when to call tools
+- **Easy to swap LLMs** — change `ChatOpenAI` to `ChatGoogleGenerativeAI` and it still works
+- **Extensible** — can add memory, routing, or multi-agent workflows later
 
 ---
 
-### Why We Use LangChain with MCP
+### Gemini Client
 
-Using LangChain together with MCP gives us several practical advantages:
-
-- We don’t need to worry about LLM-specific input or tool formats
-LangChain + MCP adapters automatically convert MCP tools into the correct format for OpenAI, Gemini, etc.
-
-- We don’t need to manage function call IDs
-LangChain handles tool call tracking and response matching internally.
-
-- We can use multiple tools in one workflow
-The agent can call different tools step-by-step without manual orchestration.
-
-- The agent decides when and how to use tools
-We don’t write custom logic to detect tool calls or execute them.
-
-- Multi-step reasoning is handled automatically
-The agent can think, act, observe results, and continue until the task is complete.
-
-- Switching LLM providers is easy
-We can move from Gemini to OpenAI (or others) with minimal code changes.
-
-- The system is easy to extend
-We can later add memory, routing, or multi-agent workflows without rewriting MCP logic.
+`gemini_client.py` is included for reference. Same pattern but uses `ChatGoogleGenerativeAI` instead of `ChatOpenAI`. Requires a `GOOGLE_API_KEY` in your `.env` file.
