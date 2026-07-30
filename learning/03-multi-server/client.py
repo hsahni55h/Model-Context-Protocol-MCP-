@@ -32,7 +32,7 @@ from mcp.client.stdio import stdio_client             # For establishing a stdio
 # Agent and LLM Imports
 # ---------------------------
 from langchain_mcp_adapters.tools import load_mcp_tools  # Adapter to convert MCP tools to LangChain compatible tools
-from langgraph.prebuilt import create_react_agent        # Function to create a prebuilt React agent using LangGraph
+from langchain.agents import create_agent                # Prebuilt agent from LangChain
 from langchain_openai import ChatOpenAI                  # Wrapper for the OpenAI API via LangChain
 
 # ---------------------------

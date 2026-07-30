@@ -35,7 +35,7 @@ from mcp.client.stdio import stdio_client            # For connecting to the MCP
 # Agent and LLM Imports
 # ---------------------------
 from langchain_mcp_adapters.tools import load_mcp_tools  # Adapter to load MCP tools correctly
-from langgraph.prebuilt import create_react_agent        # Prebuilt React agent from LangGraph
+from langchain.agents import create_agent                # Prebuilt agent from LangChain
 from langchain_openai import ChatOpenAI                  # OpenAI LLM wrapper (LangChain integration)
 
 # ---------------------------
@@ -74,7 +74,7 @@ llm = ChatOpenAI(
 # MCP Server Script Argument
 # ---------------------------
 if len(sys.argv) < 2:
-    print("Usage: python langchain_mcp_client_openai.py <path_to_server_script>")
+    print("Usage: uv run python learning/03-multi-server/client_single.py <path_to_server_script>")
     sys.exit(1)
 server_script = sys.argv[1]
 
@@ -83,7 +83,7 @@ server_script = sys.argv[1]
 # ---------------------------
 # Configure parameters to launch the MCP server.
 server_params = StdioServerParameters(
-    command="python" if server_script.endswith(".py") else "node",
+    command=sys.executable if server_script.endswith(".py") else "node",
     args=[server_script],
 )
 

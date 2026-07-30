@@ -1,79 +1,110 @@
-# LangChain MCP Client (OpenAI + Multi-Server Support)
+# 03 - Multi-Server MCP Client
 
-This project implements a **LangChain-based MCP (Model Context Protocol) client** that can connect to **multiple MCP servers**, load their tools, and use an **OpenAI model** to reason, call tools, and respond to user queries.
+Connect to **multiple MCP servers simultaneously** from a single LangChain agent. The agent sees tools from all servers and decides which to use based on the query.
 
-It allows an AI agent to:
+## What's in this folder
 
-- Discover tools exposed by MCP servers  
-- Decide when a tool is needed  
-- Execute the tool automatically  
-- Use the tool output to generate a final answer  
+| File | Purpose |
+|---|---|
+| `client.py` | **Config-driven** multi-server client. Reads servers from `config.json`, connects to all of them, aggregates tools into one agent. |
+| `client_single.py` | **Single-server** client (same pattern as `02-langchain-adapters`). Takes a server script as CLI argument. Useful for quick testing. |
+| `math_server.py` | A simple math MCP server (add, multiply, divide) used as the second server for the demo. |
+| `config.json` | Defines which MCP servers to connect to (command + args for each). |
 
----
+## How it works
 
-## What This Client Does
+```
+config.json
+  |
+  +-- terminal server  -->  run_command tool
+  |
+  +-- math server      -->  add, multiply, divide tools
+  |
+  v
+client.py  -->  LangChain agent with ALL tools
+```
 
-The file `langchain_mcp_client_wconfig_openai.py`:
+1. `client.py` reads `config.json` to discover servers
+2. Connects to each server via stdio and loads its tools
+3. Merges all tools into a single LangChain agent
+4. The LLM decides which server's tool to call based on your query
 
-- Loads MCP server configuration from a JSON file  
-- Connects to one or more MCP servers via **stdio**  
-- Loads tools from each server  
-- Uses **OpenAI (via LangChain)** to create a React-style agent  
-- Runs an interactive chat loop for user queries  
+## Prerequisites
 
----
+```bash
+# From the repo root
+uv sync --extra langchain
+```
 
+## Running
 
+### Option A: Multi-server client (recommended)
 
-## Why LangChain Is Used
+```bash
+# From the repo root
+uv run python learning/03-multi-server/client.py
+```
 
-LangChain simplifies MCP + LLM integration by:
+This connects to both servers defined in `config.json`:
+- **terminal** - our terminal server from `01-mcp-basics` (provides `run_command`)
+- **math** - a simple math server in this folder (provides `add`, `multiply`, `divide`)
 
-- Converting MCP tools into LLM-compatible tools  
-- Handling tool-call formats automatically  
-- Managing multi-step reasoning and tool usage  
-- Removing the need to track call IDs manually  
-- Allowing multiple tools from multiple servers  
-- Making it easy to switch LLM providers  
+### Option B: Single-server client
 
-Without LangChain, you would need to manually manage:
-- Tool schemas  
-- Message formats  
-- Function call tracking  
-- Multi-step reasoning  
+```bash
+# From the repo root
+uv run python learning/03-multi-server/client_single.py learning/01-mcp-basics/server/main.py
+```
 
----
+## Example session (multi-server)
 
-## Configuration File (config.json)
+```
+Connecting to MCP Server: terminal...
+  Loaded tool: run_command
+  1 tools loaded from terminal.
 
-Your MCP servers are defined in a JSON file:
+Connecting to MCP Server: math...
+  Loaded tool: add
+  Loaded tool: multiply
+  Loaded tool: divide
+  3 tools loaded from math.
+
+MCP Client Ready! Type 'quit' to exit.
+
+Query: List files in the workspace
+[calls run_command from terminal server]
+Response: The workspace contains: mcp_client_test.txt
+
+Query: What is 42 * 17?
+[calls multiply from math server]
+Response: 42 * 17 = 714.0
+
+Query: quit
+```
+
+## Customizing config.json
+
+Add any MCP server by specifying its `command` and `args`:
 
 ```json
 {
-  "preferences": {},
   "mcpServers": {
-    "terminal_docker": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "-e",
-        "DOCKER_CONTAINER=true",
-        "-v",
-        "/Users/himanshu/github_himanshu/Model-Context-Protocol-MCP-/mcp/workspace:/root/mcp/workspace",
-        "terminal_server_docker"
-      ]
+    "my_server": {
+      "command": "uv",
+      "args": ["run", "python", "path/to/server.py"]
     },
-    "fetch": {
+    "docker_server": {
       "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "mcp_fetch_server_test"
-      ]
+      "args": ["run", "-i", "--rm", "--init", "my_image"]
+    },
+    "npx_server": {
+      "command": "npx",
+      "args": ["-y", "@some/mcp-server"]
     }
   }
 }
+```
+
+## Key concept: why multi-server matters
+
+In real-world MCP setups, each server exposes a focused set of tools (file ops, database, API, etc.). A multi-server client lets one agent use tools from all of them — the LLM picks the right server's tool automatically. This is how Cursor, Claude Desktop, and other MCP hosts work internally.
