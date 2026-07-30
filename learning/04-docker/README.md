@@ -68,7 +68,31 @@ uv run mcp dev learning/04-docker/terminal_server.py
 
 This runs the server **locally** (not in Docker) using the Inspector — useful for verifying the tool works before containerizing.
 
-#### 4. Use with Cursor
+#### 4. Test the Docker container with the Python client
+
+```bash
+uv run python learning/04-docker/test_docker_client.py
+```
+
+This launches the Docker container as an MCP server and connects to it with OpenAI. Try:
+
+```
+Query: What files are in the workspace?
+[Tool call: run_command args={'command': 'ls'}]
+
+Query: Create a file called from_docker.txt with "hello from Docker"
+[Tool call: run_command args={'command': 'echo "hello from Docker" > from_docker.txt'}]
+
+Query: Read from_docker.txt
+[Tool call: run_command args={'command': 'cat from_docker.txt'}]
+hello from Docker
+
+Query: quit
+```
+
+The file `from_docker.txt` will appear in `learning/01-mcp-basics/workspace/` on your host — created inside Docker but synced via the volume mount.
+
+#### 5. Use with Cursor
 
 Add this to Cursor → Settings → MCP:
 
