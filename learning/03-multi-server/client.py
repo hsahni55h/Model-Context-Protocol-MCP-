@@ -177,8 +177,8 @@ async def run_agent():
             print("❌ No tools loaded from any server. Exiting.")
             return
 
-        # Create a React agent using OpenAI and the aggregated MCP tools
-        agent = create_react_agent(llm, tools)
+        # Create an agent using OpenAI and the aggregated MCP tools
+        agent = create_agent(llm, tools)
 
         # Start interactive chat loop
         print("\n🚀 MCP Client Ready! Type 'quit' to exit.")
