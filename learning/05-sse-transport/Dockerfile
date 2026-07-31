@@ -1,30 +1,21 @@
-# Use the official Python 3.11-slim image as the base image.
 FROM python:3.11-slim
 
-# Set the working directory inside the container.
 WORKDIR /app
 
-# Prevent Python from writing .pyc files and force stdout/stderr to be unbuffered.
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Install uv for dependency management
+RUN pip install --no-cache-dir uv
 
-# Default workspace inside the container (you can override at runtime).
-ENV WORKSPACE_DIR=/app/workspace
+# Copy dependency file first (layer caching)
+COPY pyproject.toml /app/
 
-# Copy only requirements first to leverage Docker layer caching.
-COPY requirements.txt /app/requirements.txt
+# Install dependencies
+RUN uv pip install --system "mcp[cli]>=1.25.0,<2.0.0" uvicorn starlette
 
-# Install required Python packages from requirements.txt.
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy server code
+COPY server.py /app/
 
-# Copy the rest of the project files into the container.
-COPY . /app
+# SSE server listens on port 8000
+EXPOSE 8000
 
-# Ensure workspace directory exists inside container.
-RUN mkdir -p /app/workspace
-
-# Expose port 8081 so that the container can accept incoming connections.
-EXPOSE 8081
-
-# Define the command to run your SSE server.
-CMD ["python", "terminal_server_sse.py"]
+# Run the SSE server
+CMD ["python", "server.py"]
