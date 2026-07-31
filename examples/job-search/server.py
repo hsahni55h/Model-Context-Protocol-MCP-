@@ -20,11 +20,13 @@ import os
 import asyncio
 from typing import Any
 from mcp.server.fastmcp import FastMCP
+from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 from apify_client import ApifyClient
 
-load_dotenv()
+# Resolve .env from repo root (2 levels up from examples/job-search/)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 mcp = FastMCP("job-search")
 
