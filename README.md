@@ -1,8 +1,45 @@
-# Model Context Protocol (MCP) — Learning & Projects
+# Model Context Protocol (MCP) — Toolkit, Learning & Projects
 
-A structured, hands-on repository for learning the **Model Context Protocol (MCP)** from
-scratch — the open standard that lets AI models call external tools, read data sources,
-and interact with services through a unified interface.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+
+A complete **MCP ecosystem** — a reusable toolkit you can plug into your projects,
+a progressive learning path, and real-world example servers. Built around the
+[Model Context Protocol](https://modelcontextprotocol.io/) — the open standard that
+lets AI models call external tools, read data sources, and interact with services
+through a unified interface.
+
+---
+
+## MCP Toolkit — Plug & Play
+
+> **`mcp-toolkit/`** — Install it, import it, connect any LLM to any MCP server in 3 lines.
+
+```python
+from mcp_toolkit.clients import OpenAIMCPClient
+
+async with OpenAIMCPClient(server_script="my_server.py") as client:
+    response = await client.chat("What's the weather in Paris?")
+```
+
+**What's included:**
+
+| Component | What It Does |
+|-----------|-------------|
+| `OpenAIMCPClient` | Drop-in OpenAI client with full tool-calling loop |
+| `GeminiMCPClient` | Same for Google Gemini |
+| `AnthropicMCPClient` | Same for Claude |
+| `LangChainMCPClient` | LangChain React agent with auto tool loading |
+| `MultiServerClient` | Connect to multiple servers from a config file |
+| `mcp_to_openai/gemini/anthropic` | Convert MCP tools to any provider format |
+| `connect()` | Transport abstraction — stdio or SSE, one interface |
+| `openai_helper` / `load_env` | Server-side utilities for building tools |
+
+```bash
+pip install "mcp-toolkit[openai]"     # or [gemini], [anthropic], [langchain], [all]
+```
+
+**[→ Full Toolkit Documentation](mcp-toolkit/README.md)**
 
 ---
 
@@ -14,6 +51,7 @@ are either too abstract (just docs) or too scattered (random blog posts).
 
 **This repo fixes that.** It provides:
 
+- A **plug-and-play toolkit** (`mcp-toolkit/`) you can install and use immediately
 - A **progressive learning path** (5 modules) that builds concepts one at a time
 - **Real-world example projects** you can study, run, and extend
 - **Every module is tested and working** — not just code snippets, but complete runnable projects
@@ -26,7 +64,12 @@ to build tool-using AI agents, this repo gives you everything in one place.
 
 ## What's Inside
 
-The repo has two main sections:
+The repo has three main sections:
+
+### `mcp-toolkit/` — Reusable package (install & use)
+
+A standalone Python package with pre-built MCP clients, converters, and utilities.
+Fork it, install it, or use it as a dependency in your own projects.
 
 ### `learning/` — Step-by-step MCP tutorials
 
@@ -41,6 +84,10 @@ your own projects.
 
 ```
 .
+├── mcp-toolkit/               # ⭐ Installable package — plug & play
+│   ├── src/mcp_toolkit/       # Clients, converters, config, transports
+│   ├── examples/              # Quickstart scripts
+│   └── tests/                 # Test suite
 ├── learning/                  # Step-by-step MCP tutorials
 │   ├── 01-mcp-basics/         # Core client ↔ server over STDIO
 │   ├── 02-langchain-adapters/ # Simplify clients with LangChain MCP Adapters
