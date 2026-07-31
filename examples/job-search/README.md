@@ -39,6 +39,20 @@ Get an Apify API token at [apify.com](https://apify.com) (free tier available).
 
 ## Running
 
+### Streamlit app (recommended)
+
+Upload a PDF resume and use all 3 tools through a visual UI:
+
+```bash
+uv run streamlit run examples/job-search/app.py
+```
+
+The app connects to the MCP server behind the scenes — each button click calls an MCP tool.
+
+### MCP Inspector
+
+Test individual tools directly:
+
 ```bash
 uv run mcp dev examples/job-search/server.py
 ```
@@ -72,6 +86,7 @@ AI Researcher, Autonomous Systems Engineer
 ```
 job-search/
   server.py      <- MCP server with 3 tools + resource
+  app.py         <- Streamlit UI that calls MCP tools
   README.md
   test-data/     <- Put your resume PDF here (gitignored)
 ```
