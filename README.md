@@ -180,6 +180,7 @@ Add them to your `.env` file (see `.env.example`).
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+This project is licensed under the [MIT License](LICENSE). You are free to use,
+modify, and distribute this code for any purpose.
 
 See the [LICENSE](LICENSE) file for the full text and additional disclaimer.
