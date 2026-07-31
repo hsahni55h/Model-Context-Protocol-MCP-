@@ -42,11 +42,9 @@ storyforge = [
     "tavily-python>=0.5.0",
 ]
 
-# Job recommender tool
+# Job search tool
 jobs = [
-    "streamlit>=1.30.0",
     "apify-client>=1.6.0",
-    "pymupdf>=1.24.0",
 ]
 
 # Install everything

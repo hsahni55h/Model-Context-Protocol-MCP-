@@ -39,18 +39,8 @@ Get an Apify API token at [apify.com](https://apify.com) (free tier available).
 
 ## Running
 
-### Test with MCP Inspector
-
 ```bash
 uv run mcp dev examples/job-search/server.py
-```
-
-### Run the Streamlit app
-
-The Streamlit app provides a visual UI for uploading a PDF resume and getting job recommendations:
-
-```bash
-uv run streamlit run examples/job-search/app.py
 ```
 
 ## Example tool output
@@ -81,10 +71,7 @@ AI Researcher, Autonomous Systems Engineer
 
 ```
 job-search/
-  server.py           <- MCP server with 3 tools + resource
-  app.py              <- Streamlit web UI (standalone, calls APIs directly)
-  src/
-    helper.py         <- PDF extraction + OpenAI helpers (used by app.py)
-    job_api.py        <- Apify LinkedIn scraper (used by app.py)
-  test-data/          <- Put your resume PDF here (gitignored)
+  server.py      <- MCP server with 3 tools + resource
+  README.md
+  test-data/     <- Put your resume PDF here (gitignored)
 ```
