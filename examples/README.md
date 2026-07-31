@@ -27,7 +27,7 @@ Each example has its own README with setup instructions. General pattern:
 uv sync --extra <group>
 
 # Run the MCP server with Inspector
-uv run mcp dev examples/<name>/mcp_server.py
+uv run mcp dev examples/<name>/server.py
 
 # Or run the web app (if it has one)
 uv run streamlit run examples/<name>/app.py
