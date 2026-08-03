@@ -30,13 +30,13 @@ async def connect(
     """Connect to an MCP server and yield an initialized ClientSession.
 
     Automatically selects the correct transport based on parameters:
-    - If `url` is provided → SSE transport (HTTP)
+    - If `url` is provided → SSE or streamable_http transport (HTTP)
     - If `script` is provided → stdio transport (subprocess)
     - If `config` is provided → uses config.transport to decide
 
     Args:
         script: Path to a server script (.py or .js). Auto-detects interpreter.
-        url: SSE endpoint URL (e.g. "http://localhost:8000/sse").
+        url: Endpoint URL (for SSE or streamable_http).
         command: Explicit command override (default: auto-detected from script extension).
         args: Explicit args override.
         env: Environment variables for the subprocess.
@@ -52,21 +52,27 @@ async def connect(
         >>> async with connect(url="http://localhost:8000/sse") as session:
         ...     result = await session.call_tool("greet", {"name": "World"})
     """
+    transport_type = None
+
     # Resolve from config object if provided
     if config:
-        if config.transport == "sse":
+        transport_type = config.transport
+        if transport_type in ("sse", "streamable_http"):
             url = config.url
         else:
             command = config.command
             args = config.args
             env = config.env or None
-            # Build script from args if command is an interpreter
             if not script and args:
                 script = args[0] if len(args) == 1 else None
 
     if url:
-        async with _connect_sse(url) as session:
-            yield session
+        if transport_type == "streamable_http":
+            async with _connect_streamable_http(url) as session:
+                yield session
+        else:
+            async with _connect_sse(url) as session:
+                yield session
     elif script:
         resolved_command = command or _detect_command(script)
         resolved_args = args if args is not None else [script]
@@ -77,7 +83,7 @@ async def connect(
             yield session
     else:
         raise ValueError(
-            "Must provide one of: script (path), url (SSE endpoint), "
+            "Must provide one of: script (path), url (SSE/streamable_http endpoint), "
             "or config (MCPServerConfig)"
         )
 
@@ -110,6 +116,27 @@ async def _connect_sse(url: str) -> AsyncGenerator[ClientSession, None]:
         ) from e
 
     async with sse_client(url=url) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            await session.initialize()
+            yield session
+
+
+@asynccontextmanager
+async def _connect_streamable_http(url: str) -> AsyncGenerator[ClientSession, None]:
+    """Connect via streamable HTTP transport.
+
+    This is the newer MCP transport used by services like Tavily.
+    It uses standard HTTP POST/GET with optional SSE streaming.
+    """
+    try:
+        from mcp.client.streamable_http import streamable_http_client
+    except ImportError as e:
+        raise ImportError(
+            "Streamable HTTP transport requires mcp>=1.25.0. "
+            "Install with: pip install 'mcp[cli]>=1.25.0'"
+        ) from e
+
+    async with streamable_http_client(url=url) as (read_stream, write_stream, _get_session_id):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
             yield session

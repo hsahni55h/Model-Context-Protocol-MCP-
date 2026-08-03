@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any
 
 
+VALID_TRANSPORTS = ("stdio", "sse", "streamable_http")
+
+
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP server.
@@ -24,17 +27,22 @@ class MCPServerConfig:
         command: Command to launch the server (e.g. "python", "node", "uv").
         args: Arguments passed to the command.
         env: Optional environment variables for the subprocess.
-        url: SSE endpoint URL (mutually exclusive with command).
+        url: Endpoint URL for SSE or streamable_http transport.
+        transport_type: Explicit transport override ("stdio", "sse", "streamable_http").
+            If not set, auto-detected from other fields.
     """
     name: str = ""
     command: str = ""
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     url: str = ""
+    transport_type: str = ""
 
     @property
     def transport(self) -> str:
         """Determine transport type from config."""
+        if self.transport_type:
+            return self.transport_type
         if self.url:
             return "sse"
         return "stdio"
@@ -45,9 +53,14 @@ class MCPServerConfig:
         Raises:
             ValueError: If configuration is invalid.
         """
+        if self.transport_type and self.transport_type not in VALID_TRANSPORTS:
+            raise ValueError(
+                f"Server '{self.name}': transport must be one of {VALID_TRANSPORTS}, "
+                f"got '{self.transport_type}'"
+            )
         if not self.url and not self.command:
             raise ValueError(
-                f"Server '{self.name}': must specify either 'command' (for stdio) or 'url' (for SSE)"
+                f"Server '{self.name}': must specify either 'command' (for stdio) or 'url' (for SSE/streamable_http)"
             )
         if self.url and self.command:
             raise ValueError(
@@ -184,6 +197,7 @@ def _parse_config(data: dict[str, Any]) -> MCPConfig:
             args=info.get("args", []),
             env=info.get("env", {}),
             url=info.get("url", ""),
+            transport_type=info.get("transport", ""),
         )
         servers[name].validate()
 

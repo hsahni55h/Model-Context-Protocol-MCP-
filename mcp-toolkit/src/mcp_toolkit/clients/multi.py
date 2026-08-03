@@ -139,11 +139,18 @@ class MultiServerClient:
 
     async def _connect_one(self, cfg: MCPServerConfig) -> ClientSession:
         """Connect to a single server."""
-        if cfg.transport == "sse":
+        if cfg.transport == "streamable_http":
+            from mcp.client.streamable_http import streamable_http_client
+            transport = await self._exit_stack.enter_async_context(
+                streamable_http_client(url=cfg.url)
+            )
+            read_stream, write_stream, _get_session_id = transport
+        elif cfg.transport == "sse":
             from mcp.client.sse import sse_client
             transport = await self._exit_stack.enter_async_context(
                 sse_client(url=cfg.url)
             )
+            read_stream, write_stream = transport
         else:
             server_params = StdioServerParameters(
                 command=cfg.command,
@@ -153,8 +160,8 @@ class MultiServerClient:
             transport = await self._exit_stack.enter_async_context(
                 stdio_client(server_params)
             )
+            read_stream, write_stream = transport
 
-        read_stream, write_stream = transport
         session = await self._exit_stack.enter_async_context(
             ClientSession(read_stream, write_stream)
         )
@@ -170,6 +177,49 @@ class MultiServerClient:
     def server_names(self) -> list[str]:
         """Names of connected servers."""
         return list(self._sessions.keys())
+
+    def get_tools_by_server(self, server_name: str) -> list[str]:
+        """Get tool names for a specific server.
+
+        Args:
+            server_name: Name of the server as defined in config.
+
+        Returns:
+            List of tool names from that server.
+        """
+        return [
+            name for name, server in self._tool_to_server.items()
+            if server == server_name
+        ]
+
+    async def call_tool_on_server(
+        self, server_name: str, tool_name: str, arguments: dict[str, Any] = None
+    ) -> str:
+        """Call a specific tool on a specific server.
+
+        Useful when you know which server owns the tool and want to bypass lookup.
+
+        Args:
+            server_name: Target server name.
+            tool_name: Tool name on that server.
+            arguments: Tool arguments.
+
+        Returns:
+            Tool result as text.
+        """
+        session = self._sessions.get(server_name)
+        if not session:
+            raise ValueError(f"Server '{server_name}' not connected. Available: {self.server_names}")
+
+        result = await session.call_tool(tool_name, arguments or {})
+
+        if hasattr(result, "content"):
+            if isinstance(result.content, list):
+                return "\n".join(
+                    getattr(part, "text", str(part)) for part in result.content
+                )
+            return str(result.content)
+        return str(result)
 
     async def call_tool(self, name: str, arguments: dict[str, Any] = None) -> str:
         """Execute a tool on the appropriate server.

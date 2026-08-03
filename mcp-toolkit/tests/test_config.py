@@ -22,6 +22,19 @@ class TestMCPServerConfig:
         cfg = MCPServerConfig(name="test", url="http://localhost:8000/sse")
         assert cfg.transport == "sse"
 
+    def test_streamable_http_transport_explicit(self):
+        cfg = MCPServerConfig(
+            name="test", url="http://localhost:8000/mcp", transport_type="streamable_http"
+        )
+        assert cfg.transport == "streamable_http"
+
+    def test_transport_type_overrides_inference(self):
+        # Even with a URL, transport_type takes precedence
+        cfg = MCPServerConfig(
+            name="test", url="http://localhost:8000/sse", transport_type="streamable_http"
+        )
+        assert cfg.transport == "streamable_http"
+
     def test_validate_no_command_or_url(self):
         cfg = MCPServerConfig(name="test")
         with pytest.raises(ValueError, match="must specify either"):
@@ -39,6 +52,19 @@ class TestMCPServerConfig:
     def test_validate_valid_sse(self):
         cfg = MCPServerConfig(name="test", url="http://localhost:8000/sse")
         cfg.validate()  # Should not raise
+
+    def test_validate_valid_streamable_http(self):
+        cfg = MCPServerConfig(
+            name="test", url="http://localhost:8000/mcp", transport_type="streamable_http"
+        )
+        cfg.validate()  # Should not raise
+
+    def test_validate_invalid_transport_type(self):
+        cfg = MCPServerConfig(
+            name="test", url="http://localhost:8000", transport_type="websocket"
+        )
+        with pytest.raises(ValueError, match="transport must be one of"):
+            cfg.validate()
 
 
 class TestParseConfig:
@@ -70,6 +96,19 @@ class TestParseConfig:
         }
         config = _parse_config(data)
         assert config.servers["remote"].transport == "sse"
+
+    def test_streamable_http_server(self):
+        data = {
+            "mcpServers": {
+                "tavily": {
+                    "url": "https://mcp.tavily.com/mcp",
+                    "transport": "streamable_http",
+                },
+            }
+        }
+        config = _parse_config(data)
+        assert config.servers["tavily"].transport == "streamable_http"
+        assert config.servers["tavily"].url == "https://mcp.tavily.com/mcp"
 
     def test_empty_config_raises(self):
         with pytest.raises(ValueError, match="No valid server"):

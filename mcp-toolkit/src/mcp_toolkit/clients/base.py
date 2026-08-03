@@ -82,7 +82,9 @@ class BaseMCPClient(ABC):
             await self._connect_stdio(cmd, args)
         elif self._server_config:
             cfg = self._server_config
-            if cfg.transport == "sse":
+            if cfg.transport == "streamable_http":
+                await self._connect_streamable_http(cfg.url)
+            elif cfg.transport == "sse":
                 await self._connect_sse(cfg.url)
             else:
                 await self._connect_stdio(cfg.command, cfg.args)
@@ -118,6 +120,25 @@ class BaseMCPClient(ABC):
 
         transport = await self._exit_stack.enter_async_context(sse_client(url=url))
         read_stream, write_stream = transport
+        self._session = await self._exit_stack.enter_async_context(
+            ClientSession(read_stream, write_stream)
+        )
+        await self._session.initialize()
+
+    async def _connect_streamable_http(self, url: str) -> None:
+        """Connect via streamable HTTP transport."""
+        try:
+            from mcp.client.streamable_http import streamable_http_client
+        except ImportError as e:
+            raise ImportError(
+                "Streamable HTTP transport requires mcp>=1.25.0. "
+                "Install with: pip install 'mcp[cli]>=1.25.0'"
+            ) from e
+
+        transport = await self._exit_stack.enter_async_context(
+            streamable_http_client(url=url)
+        )
+        read_stream, write_stream, _get_session_id = transport
         self._session = await self._exit_stack.enter_async_context(
             ClientSession(read_stream, write_stream)
         )
