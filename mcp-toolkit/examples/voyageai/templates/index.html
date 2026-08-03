@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoyageAI — Travel Planner</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✈️ VoyageAI</h1>
+            <p class="subtitle">AI-powered travel planner using MCP</p>
+        </header>
+
+        <div class="chat-container" id="chat-container">
+            <div class="message assistant">
+                <div class="message-content">
+                    Hi! I'm VoyageAI, your travel planning assistant. I can help you with:
+                    <ul>
+                        <li>Finding flights between cities</li>
+                        <li>Checking weather at your destination</li>
+                        <li>Searching for hotels and attractions</li>
+                        <li>Converting currencies for your budget</li>
+                    </ul>
+                    Where would you like to go?
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Plan a trip to Tokyo next week..." autofocus>
+            <button id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
