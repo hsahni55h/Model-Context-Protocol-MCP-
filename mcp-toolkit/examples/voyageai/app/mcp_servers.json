@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "python",
+      "args": ["servers/weather_server.py"],
+      "env": {
+        "OPENWEATHER_API_KEY": "${OPENWEATHER_API_KEY}"
+      }
+    },
+    "currency": {
+      "command": "python",
+      "args": ["servers/currency_server.py"],
+      "env": {
+        "EXCHANGE_RATE_API_KEY": "${EXCHANGE_RATE_API_KEY}"
+      }
+    },
+    "tavily": {
+      "url": "https://mcp.tavily.com/mcp",
+      "transport": "streamable_http",
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      }
+    }
+  }
+}
