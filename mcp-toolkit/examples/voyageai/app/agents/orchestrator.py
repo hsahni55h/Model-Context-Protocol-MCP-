@@ -47,12 +47,24 @@ class TravelOrchestrator:
         """Connect to all MCP servers and prepare tools."""
         config = get_mcp_config()
         servers = config.get("mcpServers", config)
-        client = MultiServerClient.from_dict(servers)
+        client = MultiServerClient.from_dict(servers, api_key=OPENAI_API_KEY)
         self._mcp_client = await client.__aenter__()
         self._openai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-        # Convert MCP tools to OpenAI format
-        self._tools_openai = mcp_to_openai(self._mcp_client._all_mcp_tools)
+        # Convert MCP tools to OpenAI Chat Completions format
+        raw_tools = mcp_to_openai(self._mcp_client._all_mcp_tools)
+        # mcp_to_openai outputs Responses API format; wrap for Chat Completions
+        self._tools_openai = [
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "parameters": t.get("parameters", {}),
+                },
+            }
+            for t in raw_tools
+        ]
 
     async def close(self) -> None:
         """Disconnect from all servers."""
