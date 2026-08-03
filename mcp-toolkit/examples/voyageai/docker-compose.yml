@@ -1,0 +1,15 @@
+services:
+  voyageai:
+    build:
+      context: ../../../
+      dockerfile: mcp-toolkit/examples/voyageai/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - voyageai-data:/app/voyageai/data
+    restart: unless-stopped
+
+volumes:
+  voyageai-data:
