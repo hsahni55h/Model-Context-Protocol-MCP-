@@ -12,6 +12,7 @@ from mcp_toolkit.converters import (
     mcp_to_anthropic,
     mcp_to_gemini,
     mcp_to_openai,
+    mcp_to_openai_chat,
 )
 from mcp_toolkit.config import MCPConfig, MCPServerConfig, load_config, load_config_from_dict
 from mcp_toolkit.transports import connect
@@ -22,6 +23,7 @@ __all__ = [
     # Converters
     "clean_schema",
     "mcp_to_openai",
+    "mcp_to_openai_chat",
     "mcp_to_gemini",
     "mcp_to_anthropic",
     # Config

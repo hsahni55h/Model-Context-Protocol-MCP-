@@ -169,6 +169,11 @@ class MultiServerClient:
         return session
 
     @property
+    def all_tools(self) -> list:
+        """All MCP tool objects across every connected server."""
+        return self._all_mcp_tools
+
+    @property
     def tool_names(self) -> list[str]:
         """Names of all available tools across all servers."""
         return [t.name for t in self._all_mcp_tools]

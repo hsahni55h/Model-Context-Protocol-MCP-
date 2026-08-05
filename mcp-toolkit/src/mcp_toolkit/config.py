@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -178,8 +179,46 @@ def _read_json(path: Path) -> dict:
         raise ValueError(f"Invalid JSON in {path}: {e}") from e
 
 
+def _resolve_placeholder(value: str) -> str:
+    """Resolve ``${VAR}`` placeholders in a string using os.environ.
+
+    Unset variables are replaced with an empty string.
+
+    Example:
+        >>> os.environ["MY_KEY"] = "abc123"
+        >>> _resolve_placeholder("https://api.example.com/?key=${MY_KEY}")
+        'https://api.example.com/?key=abc123'
+    """
+    return re.sub(
+        r"\$\{(\w+)\}",
+        lambda m: os.getenv(m.group(1), ""),
+        value,
+    )
+
+
+def _resolve_server_env_vars(info: dict[str, Any]) -> dict[str, Any]:
+    """Resolve ``${VAR}`` placeholders in a single server config dict.
+
+    Applies substitution to the ``url`` field and all values inside ``env``.
+    Other fields (command, args, etc.) are returned unchanged.
+    """
+    resolved = dict(info)
+    if "url" in resolved and isinstance(resolved["url"], str):
+        resolved["url"] = _resolve_placeholder(resolved["url"])
+    if "env" in resolved and isinstance(resolved["env"], dict):
+        resolved["env"] = {
+            k: _resolve_placeholder(v) if isinstance(v, str) else v
+            for k, v in resolved["env"].items()
+        }
+    return resolved
+
+
 def _parse_config(data: dict[str, Any]) -> MCPConfig:
-    """Parse a config dict into MCPConfig."""
+    """Parse a config dict into MCPConfig.
+
+    ``${VAR}`` placeholders in ``url`` and ``env`` values are automatically
+    resolved from environment variables before the config is returned.
+    """
     # Support standard format: {"mcpServers": {...}}
     servers_data = data.get("mcpServers", data)
 
@@ -191,6 +230,7 @@ def _parse_config(data: dict[str, Any]) -> MCPConfig:
     for name, info in servers_data.items():
         if not isinstance(info, dict):
             continue
+        info = _resolve_server_env_vars(info)
         servers[name] = MCPServerConfig(
             name=name,
             command=info.get("command", ""),

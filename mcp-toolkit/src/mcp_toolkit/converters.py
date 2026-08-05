@@ -35,15 +35,20 @@ def clean_schema(schema: Any) -> Any:
 def mcp_to_openai(mcp_tools: list) -> list[dict[str, Any]]:
     """Convert MCP tools to OpenAI Responses API format.
 
+    Use this with ``openai.responses.create()`` (the newer Responses API).
+    For the standard ``openai.chat.completions.create()`` API, use
+    :func:`mcp_to_openai_chat` instead.
+
     Args:
         mcp_tools: List of MCP tool objects (with .name, .description, .inputSchema).
 
     Returns:
-        List of tool dicts in OpenAI's function calling format.
+        List of tool dicts in OpenAI Responses API format (flat, no nested "function" key).
 
     Example:
         >>> from mcp_toolkit.converters import mcp_to_openai
         >>> tools = mcp_to_openai(await session.list_tools())
+        >>> response = openai.responses.create(model="gpt-4o", tools=tools, ...)
     """
     openai_tools = []
     for tool in mcp_tools:
@@ -55,6 +60,38 @@ def mcp_to_openai(mcp_tools: list) -> list[dict[str, Any]]:
             "parameters": parameters,
         })
     return openai_tools
+
+
+def mcp_to_openai_chat(mcp_tools: list) -> list[dict[str, Any]]:
+    """Convert MCP tools to OpenAI Chat Completions API format.
+
+    Use this with ``openai.chat.completions.create()`` — the standard Chat API
+    used by most applications and the ``AsyncOpenAI`` client. The difference from
+    :func:`mcp_to_openai` is the nested ``"function"`` key required by Chat Completions.
+
+    Args:
+        mcp_tools: List of MCP tool objects (with .name, .description, .inputSchema).
+
+    Returns:
+        List of tool dicts in OpenAI Chat Completions format (with nested "function" key).
+
+    Example:
+        >>> from mcp_toolkit.converters import mcp_to_openai_chat
+        >>> tools = mcp_to_openai_chat(await session.list_tools())
+        >>> response = await openai.chat.completions.create(model="gpt-4o", tools=tools, ...)
+    """
+    chat_tools = []
+    for tool in mcp_tools:
+        parameters = clean_schema(tool.inputSchema) if tool.inputSchema else {}
+        chat_tools.append({
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description or "",
+                "parameters": parameters,
+            },
+        })
+    return chat_tools
 
 
 def mcp_to_gemini(mcp_tools: list) -> list[dict[str, Any]]:
