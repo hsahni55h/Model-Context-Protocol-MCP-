@@ -87,7 +87,7 @@ class BaseMCPClient(ABC):
             elif cfg.transport == "sse":
                 await self._connect_sse(cfg.url)
             else:
-                await self._connect_stdio(cfg.command, cfg.args)
+                await self._connect_stdio(cfg.command, cfg.args, cfg.env or None)
         else:
             raise ValueError(
                 "Must provide server_script, server_url, or server_config"
@@ -97,9 +97,9 @@ class BaseMCPClient(ABC):
         response = await self._session.list_tools()
         self._mcp_tools = response.tools
 
-    async def _connect_stdio(self, command: str, args: list[str]) -> None:
+    async def _connect_stdio(self, command: str, args: list[str], env: dict[str, str] | None = None) -> None:
         """Connect via stdio transport."""
-        server_params = StdioServerParameters(command=command, args=args)
+        server_params = StdioServerParameters(command=command, args=args, env=env)
         transport = await self._exit_stack.enter_async_context(
             stdio_client(server_params)
         )

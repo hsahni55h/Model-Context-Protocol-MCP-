@@ -61,14 +61,14 @@ class MultiServerClient:
             )
 
         try:
-            from openai import OpenAI
+            from openai import AsyncOpenAI
         except ImportError as e:
             raise ImportError(
                 "MultiServerClient requires the 'openai' extra. "
                 "Install with: pip install 'mcp-toolkit[openai]'"
             ) from e
 
-        self._openai = OpenAI(api_key=resolved_key)
+        self._openai = AsyncOpenAI(api_key=resolved_key)
         self._exit_stack = AsyncExitStack()
         self._sessions: dict[str, ClientSession] = {}
         self._all_mcp_tools: list = []
@@ -265,7 +265,7 @@ class MultiServerClient:
         ]
 
         while True:
-            response = self._openai.responses.create(
+            response = await self._openai.responses.create(
                 model=self.model,
                 tools=tools,
                 input=input_list,

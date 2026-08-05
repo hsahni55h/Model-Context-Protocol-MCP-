@@ -94,67 +94,58 @@ class GeminiMCPClient(BaseMCPClient):
         types = self._types
         tools = self._build_tool_declarations()
 
-        user_content = types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=message)],
-        )
+        contents = [
+            types.Content(role="user", parts=[types.Part.from_text(text=message)])
+        ]
 
-        response = self._genai_client.models.generate_content(
-            model=self.model,
-            contents=[user_content],
-            config=types.GenerateContentConfig(
-                tools=tools,
-                system_instruction=self.system_prompt,
-            ),
-        )
+        while True:
+            response = self._genai_client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    tools=tools,
+                    system_instruction=self.system_prompt,
+                ),
+            )
 
-        final_text = []
+            # Collect all parts from all candidates
+            response_parts = []
+            for candidate in response.candidates:
+                if candidate.content and candidate.content.parts:
+                    response_parts.extend(candidate.content.parts)
 
-        for candidate in response.candidates:
-            if not candidate.content.parts:
-                continue
+            # Check if any part is a function call
+            function_calls = [p for p in response_parts if p.function_call]
 
-            for part in candidate.content.parts:
-                if not isinstance(part, types.Part):
-                    continue
+            if not function_calls:
+                # No tool calls — extract and return final text
+                text_parts = [
+                    p.text for p in response_parts
+                    if hasattr(p, "text") and p.text
+                ]
+                return "\n".join(text_parts)
 
-                if part.function_call:
-                    tool_name = part.function_call.name
-                    tool_args = dict(part.function_call.args) if part.function_call.args else {}
+            # Append the model's response turn to the conversation history
+            contents.append(types.Content(role="model", parts=response_parts))
 
-                    # Execute tool via MCP
-                    try:
-                        result = await self.call_tool(tool_name, tool_args)
-                        function_response = {"result": result}
-                    except Exception as e:
-                        function_response = {"error": str(e)}
+            # Execute all function calls and collect results
+            tool_result_parts = []
+            for part in function_calls:
+                tool_name = part.function_call.name
+                tool_args = dict(part.function_call.args) if part.function_call.args else {}
 
-                    # Send tool result back to Gemini
-                    function_response_part = types.Part.from_function_response(
+                try:
+                    result = await self.call_tool(tool_name, tool_args)
+                    function_response = {"result": result}
+                except Exception as e:
+                    function_response = {"error": str(e)}
+
+                tool_result_parts.append(
+                    types.Part.from_function_response(
                         name=tool_name,
                         response=function_response,
                     )
-                    function_response_content = types.Content(
-                        role="tool",
-                        parts=[function_response_part],
-                    )
+                )
 
-                    response = self._genai_client.models.generate_content(
-                        model=self.model,
-                        contents=[user_content, part, function_response_content],
-                        config=types.GenerateContentConfig(
-                            tools=tools,
-                            system_instruction=self.system_prompt,
-                        ),
-                    )
-
-                    # Extract text from follow-up response
-                    for c in response.candidates:
-                        for p in c.content.parts:
-                            if hasattr(p, "text") and p.text:
-                                final_text.append(p.text)
-                else:
-                    if hasattr(part, "text") and part.text:
-                        final_text.append(part.text)
-
-        return "\n".join(final_text)
+            # Append all tool results as one turn and loop back
+            contents.append(types.Content(role="tool", parts=tool_result_parts))
