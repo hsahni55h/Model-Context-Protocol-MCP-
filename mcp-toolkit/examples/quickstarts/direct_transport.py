@@ -3,6 +3,9 @@ Example: Using the transport abstraction directly
 
 Shows how to use mcp_toolkit.connect() for low-level MCP access
 without the full client wrapper.
+
+Run from the mcp-toolkit/ directory:
+    python examples/quickstarts/direct_transport.py
 """
 
 import asyncio
@@ -11,8 +14,8 @@ from mcp_toolkit import connect
 
 
 async def main():
-    # Connect to a server via stdio
-    async with connect(script="../../examples/weather/server.py") as session:
+    # Connect to a server via stdio (path relative to mcp-toolkit/ directory)
+    async with connect(script="../examples/weather/server.py") as session:
         # List available tools
         response = await session.list_tools()
         print("Available tools:")
