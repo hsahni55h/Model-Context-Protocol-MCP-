@@ -449,6 +449,29 @@ summary = openai_helper(
 api_key = get_env_or_raise("MY_SERVICE_API_KEY")
 ```
 
+> **Why only an OpenAI helper and not Gemini/Anthropic?**
+>
+> OpenAI's Python SDK ships a **synchronous** client (`openai.OpenAI`) that works like a regular function — no `await` needed. This makes it safe to wrap in a plain `def openai_helper(...)`.
+>
+> Gemini and Anthropic's SDKs are **async-only** — they require `await`. You can't wrap them in a plain function because calling `asyncio.run()` inside an already-running async server crashes with `RuntimeError: This event loop is already running`.
+>
+> For Gemini or Anthropic inside a tool, just `await` the SDK directly — your MCP tool functions are already `async def`:
+>
+> ```python
+> from anthropic import AsyncAnthropic
+>
+> client = AsyncAnthropic()
+>
+> @mcp.tool()
+> async def summarize(text: str) -> str:
+>     response = await client.messages.create(
+>         model="claude-sonnet-4-20250514",
+>         max_tokens=200,
+>         messages=[{"role": "user", "content": f"Summarize: {text}"}],
+>     )
+>     return response.content[0].text
+> ```
+
 ---
 
 ## Building Your Own MCP Server

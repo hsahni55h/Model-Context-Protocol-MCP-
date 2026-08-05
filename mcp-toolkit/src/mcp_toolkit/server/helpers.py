@@ -3,6 +3,27 @@ MCP Server Helpers
 
 Utility functions for building MCP servers — environment loading,
 OpenAI helper for tool implementations, and common patterns.
+
+Note on AI helpers
+------------------
+Only an OpenAI helper is provided here because OpenAI's Python SDK ships a
+**synchronous** client (``openai.OpenAI``) that can be called like a regular
+function — no ``await`` needed. This makes it safe to wrap in a plain ``def``.
+
+Gemini and Anthropic's SDKs are **async-only**, meaning they require ``await``
+and cannot be called from a plain synchronous function. Calling them through
+``asyncio.run()`` would crash inside an MCP server because the MCP event loop
+is already running. For those providers, call their async clients directly
+inside your ``async def`` tool functions:
+
+    from anthropic import AsyncAnthropic
+
+    client = AsyncAnthropic()
+
+    @mcp.tool()
+    async def summarize(text: str) -> str:
+        response = await client.messages.create(...)  # just await directly
+        return response.content[0].text
 """
 
 from __future__ import annotations
