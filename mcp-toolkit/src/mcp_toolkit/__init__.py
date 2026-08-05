@@ -16,6 +16,7 @@ from mcp_toolkit.converters import (
 )
 from mcp_toolkit.config import MCPConfig, MCPServerConfig, load_config, load_config_from_dict
 from mcp_toolkit.transports import connect
+from mcp_toolkit.agents import BaseAgent
 
 __version__ = "0.1.0"
 
@@ -33,4 +34,16 @@ __all__ = [
     "load_config_from_dict",
     # Transport
     "connect",
+    # Agents
+    "BaseAgent",
+    # Clients (lazy — require provider extras)
+    "MultiServerClient",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy-load provider-specific clients that require optional extras."""
+    if name == "MultiServerClient":
+        from mcp_toolkit.clients.multi import MultiServerClient
+        return MultiServerClient
+    raise AttributeError(f"module 'mcp_toolkit' has no attribute {name!r}")

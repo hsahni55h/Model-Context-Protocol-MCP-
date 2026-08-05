@@ -2,7 +2,7 @@
 
 import pytest
 
-from mcp_toolkit.converters import clean_schema, mcp_to_openai, mcp_to_gemini, mcp_to_anthropic
+from mcp_toolkit.converters import clean_schema, mcp_to_openai, mcp_to_openai_chat, mcp_to_gemini, mcp_to_anthropic
 
 
 class MockTool:
@@ -143,3 +143,50 @@ class TestMCPToAnthropic:
         tool = MockTool("empty", "No params", None)
         result = mcp_to_anthropic([tool])
         assert result[0]["input_schema"] == {"type": "object", "properties": {}}
+
+
+class TestMCPToOpenAIChat:
+    """Tests for the Chat Completions API format (nested 'function' key)."""
+
+    def test_converts_tools(self, sample_tools):
+        result = mcp_to_openai_chat(sample_tools)
+        assert len(result) == 2
+
+        tool = result[0]
+        assert tool["type"] == "function"
+        # Chat Completions format wraps everything under a "function" key
+        assert "function" in tool
+        assert "name" not in tool          # name lives inside "function", not at top level
+        assert tool["function"]["name"] == "check_weather"
+        assert tool["function"]["description"] == "Get current weather for a city"
+
+    def test_nested_function_key(self, sample_tools):
+        """Chat format has nested 'function' key; Responses API format does not."""
+        chat_tools = mcp_to_openai_chat(sample_tools)
+        responses_tools = mcp_to_openai(sample_tools)
+
+        # Chat format: {"type": "function", "function": {"name": ..., ...}}
+        assert "function" in chat_tools[0]
+        assert chat_tools[0]["function"]["name"] == "check_weather"
+
+        # Responses format: {"type": "function", "name": ..., ...}  (flat)
+        assert "function" not in responses_tools[0]
+        assert responses_tools[0]["name"] == "check_weather"
+
+    def test_strips_titles_from_parameters(self, sample_tools):
+        result = mcp_to_openai_chat(sample_tools)
+        params = result[0]["function"]["parameters"]
+        assert "title" not in params
+        assert "title" not in params["properties"]["city"]
+
+    def test_includes_required(self, sample_tools):
+        result = mcp_to_openai_chat(sample_tools)
+        assert result[0]["function"]["parameters"]["required"] == ["city"]
+
+    def test_handles_empty_schema(self):
+        tool = MockTool("empty", "No params", None)
+        result = mcp_to_openai_chat([tool])
+        assert result[0]["function"]["parameters"] == {}
+
+    def test_handles_empty_list(self):
+        assert mcp_to_openai_chat([]) == []
