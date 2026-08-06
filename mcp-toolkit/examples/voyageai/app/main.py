@@ -3,17 +3,25 @@
 Multi-agent travel planner powered by mcp-toolkit.
 Demonstrates: MultiServerClient, multiple transports, OpenAI tool-calling.
 
-Usage:
+Development workflow:
+    # Terminal 1 — FastAPI backend
     cd examples/voyageai
     uvicorn app.main:app --reload
+
+    # Terminal 2 — Vite dev server (hot-reload, proxies /chat /sessions /health)
+    cd examples/voyageai/frontend
+    npm install && npm run dev
+
+Production (single server):
+    cd examples/voyageai/frontend && npm run build
+    cd .. && uvicorn app.main:app
 """
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.config import PROJECT_ROOT, validate_config
 from app.agents.orchestrator import TravelOrchestrator
@@ -22,6 +30,9 @@ from app.state import SessionStore
 # Global instances
 orchestrator = TravelOrchestrator()
 session_store = SessionStore()
+
+# React build output — populated by `cd frontend && npm run build`
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -43,15 +54,32 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Static files and templates
-app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
-templates = Jinja2Templates(directory=str(PROJECT_ROOT / "templates"))
+# Mount Vite's hashed asset bundle (only present after `npm run build`)
+_assets_dir = FRONTEND_DIST / "assets"
+if _assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="frontend-assets")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    """Serve the main UI."""
-    return templates.TemplateResponse(request=request, name="index.html")
+@app.get("/")
+async def home() -> FileResponse:
+    """Serve the React SPA.
+
+    Requires the frontend to be built first:
+        cd frontend && npm install && npm run build
+
+    During development, run `npm run dev` in frontend/ instead —
+    it starts a Vite server on :5173 that proxies API calls here.
+    """
+    index = FRONTEND_DIST / "index.html"
+    if not index.exists():
+        return JSONResponse(
+            {
+                "error": "Frontend not built.",
+                "fix": "cd frontend && npm install && npm run build",
+            },
+            status_code=503,
+        )
+    return FileResponse(str(index))
 
 
 @app.post("/chat")

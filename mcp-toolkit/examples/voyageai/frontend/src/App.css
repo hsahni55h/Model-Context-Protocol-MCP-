@@ -1,0 +1,260 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Vite mounts the app inside #root — make it fill the viewport */
+#root {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  height: 100vh;
+  display: flex;
+}
+
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────── */
+
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: #0f172a;
+  border-right: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.sidebar-header {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #334155;
+}
+
+.sidebar-header h2 {
+  font-size: 1rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.new-chat-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.new-chat-btn:hover {
+  background: #1e293b;
+}
+
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.session-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.2s;
+}
+
+.session-item:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.session-item.active {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+/* ── Main chat area ───────────────────────────────────────── */
+
+.container {
+  flex: 1;
+  max-width: none;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #334155;
+  background: #1e293b;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  color: #f1f5f9;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.chat-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Messages ─────────────────────────────────────────────── */
+
+.message {
+  max-width: 85%;
+  animation: fadeIn 0.3s ease;
+}
+
+.message.user {
+  align-self: flex-end;
+}
+
+.message.assistant {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: 12px 16px;
+  border-radius: 12px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+}
+
+.message.user .message-content {
+  background: #3b82f6;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant .message-content {
+  background: #334155;
+  color: #e2e8f0;
+  border-bottom-left-radius: 4px;
+}
+
+.message-content ul {
+  margin: 8px 0 0 20px;
+}
+
+.message-content li {
+  margin: 4px 0;
+}
+
+/* ── Input bar ────────────────────────────────────────────── */
+
+.input-container {
+  padding: 16px 24px;
+  border-top: 1px solid #334155;
+  display: flex;
+  gap: 12px;
+  background: #1e293b;
+}
+
+.user-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.user-input:focus {
+  border-color: #3b82f6;
+}
+
+.send-btn {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.send-btn:hover {
+  background: #2563eb;
+}
+
+.send-btn:disabled {
+  background: #475569;
+  cursor: not-allowed;
+}
+
+/* ── Animations ───────────────────────────────────────────── */
+
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #475569;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
