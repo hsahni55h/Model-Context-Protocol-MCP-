@@ -187,4 +187,110 @@ class TravelOrchestrator:
         )
         return response.choices[0].message.content or ""
 
+    async def plan(self, trip: dict) -> dict:
+        """Plan a trip from structured input. Deterministically selects agents.
+
+        Unlike chat(), this never uses an LLM to guess which agents to call —
+        agents are selected based purely on which fields the user filled in.
+
+        Args:
+            trip: Dict with keys:
+                destination    (required)
+                origin         (optional) — triggers FlightAgent
+                departure_date (optional)
+                return_date    (optional)
+                home_currency  (optional) — triggers CurrencyAgent
+
+        Returns:
+            Dict: agents_called (list), results (per-agent markdown), summary (str)
+        """
+        destination = trip.get("destination", "").strip()
+        origin = trip.get("origin", "").strip()
+        departure_date = trip.get("departure_date", "").strip()
+        return_date = trip.get("return_date", "").strip()
+        home_currency = trip.get("home_currency", "").strip()
+
+        # Build targeted task strings
+        tasks: dict[str, str] = {
+            "weather": (
+                f"Get current weather and forecast for {destination}"
+                + (f" from {departure_date} to {return_date}" if departure_date and return_date
+                   else f" around {departure_date}" if departure_date
+                   else "")
+            ),
+            "hotels": (
+                f"Find the top 5 hotels (with approximate price range per night) and top 5 "
+                f"must-see attractions or activities in {destination}. Be specific with names."
+            ),
+        }
+        if origin:
+            date_str = f"departing {departure_date}" if departure_date else ""
+            return_str = f", returning {return_date}" if return_date else ""
+            tasks["flights"] = (
+                f"Find 5 flight options from {origin} to {destination} {date_str}{return_str}. "
+                "Include airline names, approximate duration, and IATA airport codes."
+            )
+        if home_currency:
+            tasks["currency"] = (
+                f"Get the current exchange rate from {home_currency} to the local currency "
+                f"used in {destination}. Show converted amounts for 50, 100, 500, "
+                f"and 1000 {home_currency}."
+            )
+
+        results = await self._run_agents(tasks)
+        summary = await self._synthesize_plan(trip, results)
+
+        return {
+            "agents_called": list(results.keys()),
+            "results": results,
+            "summary": summary,
+        }
+
+    async def _synthesize_plan(self, trip: dict, results: dict) -> str:
+        """Combine structured agent results into a travel itinerary."""
+        destination = trip.get("destination", "")
+        origin = trip.get("origin", "")
+        departure_date = trip.get("departure_date", "")
+        return_date = trip.get("return_date", "")
+
+        trip_desc = f"{origin} → {destination}" if origin else f"Trip to {destination}"
+        dates = ""
+        if departure_date and return_date:
+            dates = f" ({departure_date} to {return_date})"
+        elif departure_date:
+            dates = f" (from {departure_date})"
+
+        research = "\n\n".join(
+            f"=== {name.upper()} ===\n{content}"
+            for name, content in results.items()
+        )
+
+        response = await self._openai.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": PLAN_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Trip: {trip_desc}{dates}\n\nAgent research:\n\n{research}",
+                },
+            ],
+        )
+        return response.choices[0].message.content or ""
+
+
+
+PLAN_PROMPT = """\
+You are VoyageAI, an expert travel planner. Research from specialist agents is below.
+Create a concise, practical travel itinerary using that research.
+
+Use markdown with these sections:
+## ✈️ Trip Overview
+## 📅 Suggested Day-by-Day Plan
+## 🌤 Weather & What to Pack
+## 💰 Budget Tips
+
+Be specific and practical. If some research is missing, note it briefly and continue.
+"""
+
+
 

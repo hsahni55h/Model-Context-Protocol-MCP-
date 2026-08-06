@@ -115,6 +115,47 @@ async def chat(request: Request) -> JSONResponse:
         )
 
 
+@app.post("/plan")
+async def plan_trip(request: Request) -> JSONResponse:
+    """Plan a trip from structured form input.
+
+    Request body:
+        destination    (required)
+        origin         (optional) — enables FlightAgent
+        departure_date (optional)
+        return_date    (optional)
+        home_currency  (optional) — enables CurrencyAgent
+        session_id     (optional) — if empty, a new session is created
+
+    Response:
+        session_id, agents_called, results (per-agent markdown), summary
+    """
+    body = await request.json()
+    destination = body.get("destination", "").strip()
+    if not destination:
+        return JSONResponse({"error": "destination is required"}, status_code=400)
+
+    session_id = body.get("session_id", "").strip()
+    if not session_id:
+        session_id = session_store.create_session()
+
+    try:
+        result = await orchestrator.plan(body)
+
+        # Save to session so the sidebar shows meaningful trip titles
+        origin = body.get("origin", "").strip()
+        departure_date = body.get("departure_date", "").strip()
+        label = f"{origin} → {destination}" if origin else destination
+        if departure_date:
+            label += f"  ·  {departure_date}"
+        session_store.save_message(session_id, "user", f"Trip: {label}")
+        session_store.save_message(session_id, "assistant", result["summary"])
+
+        return JSONResponse({**result, "session_id": session_id})
+    except Exception as e:
+        return JSONResponse({"error": str(e), "session_id": session_id}, status_code=500)
+
+
 @app.get("/sessions")
 async def list_sessions() -> JSONResponse:
     """List all conversation sessions."""
