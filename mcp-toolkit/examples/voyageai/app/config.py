@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
+from mcp_toolkit.config import load_config, MCPConfig
+
 # Project root is the voyageai/ directory
 PROJECT_ROOT = Path(__file__).parent.parent
 SERVERS_DIR = PROJECT_ROOT / "servers"
@@ -33,43 +35,48 @@ MCP_CONFIG_PATH = Path(__file__).parent / "mcp_servers.json"
 PYTHON_PATH = sys.executable
 
 
-def get_mcp_config() -> dict:
-    """Load and resolve the MCP server config with actual env vars."""
-    import json
+def get_mcp_config() -> MCPConfig:
+    """Load and resolve the MCP server config.
 
-    with open(MCP_CONFIG_PATH) as f:
-        config = json.load(f)
+    Uses mcp_toolkit.config.load_config() which handles ${VAR} placeholder
+    resolution automatically. Additionally resolves the Python executable path
+    and converts relative server script paths to absolute.
 
-    # Resolve ${VAR} placeholders in env blocks and url fields
-    for server_cfg in config.get("mcpServers", {}).values():
-        if "env" in server_cfg:
-            resolved_env = {}
-            for key, val in server_cfg["env"].items():
-                if val.startswith("${") and val.endswith("}"):
-                    env_var = val[2:-1]
-                    resolved_env[key] = os.environ.get(env_var, "")
-                else:
-                    resolved_env[key] = val
-            server_cfg["env"] = resolved_env
+    Returns:
+        MCPConfig ready to pass directly to MultiServerClient.
+    """
+    config = load_config(MCP_CONFIG_PATH)
 
-        # Resolve ${VAR} placeholders in URL
-        if "url" in server_cfg:
-            import re
-            server_cfg["url"] = re.sub(
-                r"\$\{(\w+)\}",
-                lambda m: os.environ.get(m.group(1), ""),
-                server_cfg["url"],
-            )
+    for server_cfg in config.servers.values():
+        # Resolve 'python' to the current interpreter's absolute path
+        if server_cfg.command == "python":
+            server_cfg.command = PYTHON_PATH
 
-        # Resolve command to absolute python path for stdio servers
-        if server_cfg.get("command") == "python":
-            server_cfg["command"] = PYTHON_PATH
-
-        # Resolve relative args paths to absolute
-        if "args" in server_cfg:
-            server_cfg["args"] = [
-                str(PROJECT_ROOT / arg) if not Path(arg).is_absolute() else arg
-                for arg in server_cfg["args"]
-            ]
+        # Make relative script paths absolute (relative to voyageai/ root)
+        server_cfg.args = [
+            str(PROJECT_ROOT / arg) if not Path(arg).is_absolute() else arg
+            for arg in server_cfg.args
+        ]
 
     return config
+
+
+def validate_config() -> None:
+    """Raise RuntimeError if any required API keys are missing.
+
+    Call this at application startup to surface configuration errors
+    immediately rather than mid-request.
+    """
+    required = {
+        "OPENAI_API_KEY": OPENAI_API_KEY,
+        "OPENWEATHER_API_KEY": OPENWEATHER_API_KEY,
+        "TAVILY_API_KEY": TAVILY_API_KEY,
+        "AVIATIONSTACK_API_KEY": AVIATIONSTACK_API_KEY,
+        "EXCHANGE_RATE_API_KEY": EXCHANGE_RATE_API_KEY,
+    }
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        raise RuntimeError(
+            f"Missing required API keys: {', '.join(missing)}. "
+            "Add them to your .env file."
+        )

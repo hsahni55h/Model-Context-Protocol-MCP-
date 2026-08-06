@@ -8,27 +8,11 @@ import json
 from openai import AsyncOpenAI
 
 from mcp_toolkit.clients.multi import MultiServerClient
-from mcp_toolkit.converters import mcp_to_openai
+from mcp_toolkit.converters import mcp_to_openai_chat
 
 from app.config import OPENAI_MODEL
 
 MAX_TOOL_ROUNDS = 10
-
-
-def _mcp_tools_to_chat_format(mcp_tools: list) -> list[dict]:
-    """Convert MCP tool objects to OpenAI Chat Completions format."""
-    raw = mcp_to_openai(mcp_tools)
-    return [
-        {
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t.get("description", ""),
-                "parameters": t.get("parameters", {}),
-            },
-        }
-        for t in raw
-    ]
 
 
 class BaseAgent:
@@ -51,27 +35,35 @@ class BaseAgent:
         self._setup_tools()
 
     def _setup_tools(self) -> None:
-        """Filter tools to only those from this agent's servers."""
-        tool_names = set()
-        for server in self.server_names:
-            tool_names.update(self._mcp.get_tools_by_server(server))
+        """Filter tools to only those from this agent's servers.
 
-        my_tools = [t for t in self._mcp._all_mcp_tools if t.name in tool_names]
-        self._tools = _mcp_tools_to_chat_format(my_tools)
+        If server_names is empty, grants access to all available tools.
+        """
+        if not self.server_names:
+            raw_tools = self._mcp.all_tools
+        else:
+            tool_names = set()
+            for server in self.server_names:
+                tool_names.update(self._mcp.get_tools_by_server(server))
+            raw_tools = [t for t in self._mcp.all_tools if t.name in tool_names]
+        self._tools = mcp_to_openai_chat(raw_tools)
 
-    async def run(self, query: str) -> str:
+    async def run(self, query: str, history: list[dict] | None = None) -> str:
         """Run the agent with a query, executing tools as needed.
 
         Args:
             query: The task/question for this agent.
+            history: Optional prior conversation messages for context.
 
         Returns:
             Agent's text response after tool execution.
         """
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": query},
         ]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": query})
 
         for _ in range(MAX_TOOL_ROUNDS):
             response = await self._openai.chat.completions.create(

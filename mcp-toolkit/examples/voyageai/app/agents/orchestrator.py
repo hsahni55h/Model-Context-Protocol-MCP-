@@ -17,10 +17,9 @@ import json
 from openai import AsyncOpenAI
 
 from mcp_toolkit.clients.multi import MultiServerClient
-from mcp_toolkit.converters import mcp_to_openai
 
 from app.config import OPENAI_API_KEY, OPENAI_MODEL, get_mcp_config
-from app.agents.base import BaseAgent, _mcp_tools_to_chat_format
+from app.agents.base import BaseAgent
 from app.agents.weather import WeatherAgent
 from app.agents.flight import FlightAgent
 from app.agents.hotel import HotelAgent
@@ -56,6 +55,16 @@ If some research returned errors or no data, acknowledge it gracefully
 and work with what you have."""
 
 
+class _GeneralistAgent(BaseAgent):
+    """Fallback agent with access to all tools, for simple or unclassified queries."""
+
+    server_names: list[str] = []
+    system_prompt = (
+        "You are VoyageAI, a travel planning assistant. "
+        "Use your tools to help the user."
+    )
+
+
 class TravelOrchestrator:
     """Orchestrates travel planning with parallel specialist agents."""
 
@@ -63,13 +72,11 @@ class TravelOrchestrator:
         self._mcp_client: MultiServerClient | None = None
         self._openai: AsyncOpenAI | None = None
         self._agents: dict[str, BaseAgent] = {}
-        self._all_tools_openai: list[dict] = []
 
     async def initialize(self) -> None:
         """Connect to all MCP servers and set up specialist agents."""
         config = get_mcp_config()
-        servers = config.get("mcpServers", config)
-        client = MultiServerClient.from_dict(servers, api_key=OPENAI_API_KEY)
+        client = MultiServerClient(config, api_key=OPENAI_API_KEY)
         self._mcp_client = await client.__aenter__()
         self._openai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
@@ -79,11 +86,8 @@ class TravelOrchestrator:
             "flights": FlightAgent(self._mcp_client, self._openai),
             "hotels": HotelAgent(self._mcp_client, self._openai),
             "currency": CurrencyAgent(self._mcp_client, self._openai),
+            "generalist": _GeneralistAgent(self._mcp_client, self._openai),
         }
-
-        # Keep all tools for fallback / simple queries
-        raw_tools = mcp_to_openai(self._mcp_client._all_mcp_tools)
-        self._all_tools_openai = _mcp_tools_to_chat_format(self._mcp_client._all_mcp_tools)
 
     async def close(self) -> None:
         """Disconnect from all servers."""
@@ -105,9 +109,9 @@ class TravelOrchestrator:
         # Step 1: Parse intent — ask LLM to create agent tasks
         tasks = await self._parse_intent(user_message, history)
 
-        # If we couldn't parse structured tasks, fall back to direct tool-calling
+        # If we couldn't parse structured tasks, fall back to generalist agent
         if not tasks:
-            return await self._direct_chat(user_message, history)
+            return await self._agents["generalist"].run(user_message, history)
 
         # Step 2: Run agents in parallel
         results = await self._run_agents(tasks)
@@ -183,38 +187,4 @@ class TravelOrchestrator:
         )
         return response.choices[0].message.content or ""
 
-    async def _direct_chat(self, user_message: str, history: list[dict] = None) -> str:
-        """Fallback: direct tool-calling for simple queries."""
-        messages = [
-            {"role": "system", "content": "You are VoyageAI, a travel planning assistant. Use your tools to help the user."},
-        ]
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": user_message})
 
-        for _ in range(10):
-            response = await self._openai.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=messages,
-                tools=self._all_tools_openai if self._all_tools_openai else None,
-            )
-            msg = response.choices[0].message
-            if not msg.tool_calls:
-                return msg.content or ""
-
-            messages.append(msg.model_dump())
-            for tc in msg.tool_calls:
-                try:
-                    args = json.loads(tc.function.arguments)
-                except json.JSONDecodeError:
-                    args = {}
-                try:
-                    result = await self._mcp_client.call_tool(tc.function.name, args)
-                except Exception as e:
-                    result = f"Error: {e}"
-                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
-
-        final = await self._openai.chat.completions.create(
-            model=OPENAI_MODEL, messages=messages
-        )
-        return final.choices[0].message.content or ""

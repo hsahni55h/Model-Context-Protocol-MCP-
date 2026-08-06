@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.config import PROJECT_ROOT
+from app.config import PROJECT_ROOT, validate_config
 from app.agents.orchestrator import TravelOrchestrator
 from app.state import SessionStore
 
@@ -27,6 +27,7 @@ session_store = SessionStore()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize MCP connections on startup, close on shutdown."""
+    validate_config()
     await orchestrator.initialize()
     print(f"VoyageAI ready — connected to servers: {orchestrator._mcp_client.server_names}")
     print(f"Available tools: {orchestrator._mcp_client.tool_names}")
@@ -95,6 +96,8 @@ async def list_sessions() -> JSONResponse:
 @app.get("/sessions/{session_id}")
 async def get_session(session_id: str) -> JSONResponse:
     """Load conversation history for a session."""
+    if not session_store.session_exists(session_id):
+        return JSONResponse({"error": "Session not found"}, status_code=404)
     history = session_store.load_history(session_id)
     return JSONResponse({"session_id": session_id, "history": history})
 
@@ -107,16 +110,12 @@ async def delete_session(session_id: str) -> JSONResponse:
 
 
 @app.get("/health")
-async def health():
-    return {"status": "ok"}
-
-
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
+async def health() -> JSONResponse:
+    """Health check endpoint. Returns 503 if MCP servers are not connected."""
     connected = orchestrator._mcp_client is not None
-    return {
+    payload = {
         "status": "ok" if connected else "not_ready",
         "servers": orchestrator._mcp_client.server_names if connected else [],
         "tools": orchestrator._mcp_client.tool_names if connected else [],
     }
+    return JSONResponse(payload, status_code=200 if connected else 503)

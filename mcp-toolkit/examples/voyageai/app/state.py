@@ -25,7 +25,7 @@ class SessionStore:
 
     def _init_db(self) -> None:
         """Create tables if they don't exist."""
-        self._conn = sqlite3.connect(str(self._db_path))
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -105,6 +105,20 @@ class SessionStore:
             (session_id,),
         ).fetchall()
         return [{"role": row[0], "content": row[1]} for row in rows]
+
+    def session_exists(self, session_id: str) -> bool:
+        """Check if a session exists in the store.
+
+        Args:
+            session_id: The session ID to look up.
+
+        Returns:
+            True if the session exists, False otherwise.
+        """
+        row = self._conn.execute(
+            "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        return row is not None
 
     def list_sessions(self) -> list[dict]:
         """List all sessions, most recent first.
