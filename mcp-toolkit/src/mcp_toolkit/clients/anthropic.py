@@ -56,14 +56,14 @@ class AnthropicMCPClient(BaseMCPClient):
             )
 
         try:
-            from anthropic import Anthropic
+            from anthropic import AsyncAnthropic
         except ImportError as e:
             raise ImportError(
                 "Anthropic client requires the 'anthropic' extra. "
                 "Install with: pip install 'mcp-toolkit[anthropic]'"
             ) from e
 
-        self._anthropic = Anthropic(api_key=resolved_key)
+        self._anthropic = AsyncAnthropic(api_key=resolved_key)
 
     async def chat(self, message: str) -> str:
         """Send a message and get a response with automatic tool execution.
@@ -84,7 +84,7 @@ class AnthropicMCPClient(BaseMCPClient):
         messages = [{"role": "user", "content": message}]
 
         while True:
-            response = self._anthropic.messages.create(
+            response = await self._anthropic.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=self.system_prompt,

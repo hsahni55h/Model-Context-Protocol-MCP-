@@ -23,7 +23,7 @@ def clean_schema(schema: Any) -> Any:
         The cleaned schema with all 'title' fields removed.
     """
     if isinstance(schema, dict):
-        schema.pop("title", None)
+        schema = {k: v for k, v in schema.items() if k != "title"}
         for key, value in list(schema.items()):
             schema[key] = clean_schema(value)
         return schema
@@ -32,12 +32,12 @@ def clean_schema(schema: Any) -> Any:
     return schema
 
 
-def mcp_to_openai(mcp_tools: list) -> list[dict[str, Any]]:
+def mcp_to_openai_responses(mcp_tools: list) -> list[dict[str, Any]]:
     """Convert MCP tools to OpenAI Responses API format.
 
-    Use this with ``openai.responses.create()`` (the newer Responses API).
-    For the standard ``openai.chat.completions.create()`` API, use
-    :func:`mcp_to_openai_chat` instead.
+    Use this with ``openai.responses.create()``.
+    For the more common ``openai.chat.completions.create()`` API, use
+    :func:`mcp_to_openai_completions` instead.
 
     Args:
         mcp_tools: List of MCP tool objects (with .name, .description, .inputSchema).
@@ -46,8 +46,8 @@ def mcp_to_openai(mcp_tools: list) -> list[dict[str, Any]]:
         List of tool dicts in OpenAI Responses API format (flat, no nested "function" key).
 
     Example:
-        >>> from mcp_toolkit.converters import mcp_to_openai
-        >>> tools = mcp_to_openai(await session.list_tools())
+        >>> from mcp_toolkit.converters import mcp_to_openai_responses
+        >>> tools = mcp_to_openai_responses(await session.list_tools())
         >>> response = openai.responses.create(model="gpt-4o", tools=tools, ...)
     """
     openai_tools = []
@@ -62,12 +62,11 @@ def mcp_to_openai(mcp_tools: list) -> list[dict[str, Any]]:
     return openai_tools
 
 
-def mcp_to_openai_chat(mcp_tools: list) -> list[dict[str, Any]]:
+def mcp_to_openai_completions(mcp_tools: list) -> list[dict[str, Any]]:
     """Convert MCP tools to OpenAI Chat Completions API format.
 
     Use this with ``openai.chat.completions.create()`` — the standard Chat API
-    used by most applications and the ``AsyncOpenAI`` client. The difference from
-    :func:`mcp_to_openai` is the nested ``"function"`` key required by Chat Completions.
+    used by most applications and the ``AsyncOpenAI`` client.
 
     Args:
         mcp_tools: List of MCP tool objects (with .name, .description, .inputSchema).
@@ -76,8 +75,8 @@ def mcp_to_openai_chat(mcp_tools: list) -> list[dict[str, Any]]:
         List of tool dicts in OpenAI Chat Completions format (with nested "function" key).
 
     Example:
-        >>> from mcp_toolkit.converters import mcp_to_openai_chat
-        >>> tools = mcp_to_openai_chat(await session.list_tools())
+        >>> from mcp_toolkit.converters import mcp_to_openai_completions
+        >>> tools = mcp_to_openai_completions(await session.list_tools())
         >>> response = await openai.chat.completions.create(model="gpt-4o", tools=tools, ...)
     """
     chat_tools = []
@@ -92,6 +91,11 @@ def mcp_to_openai_chat(mcp_tools: list) -> list[dict[str, Any]]:
             },
         })
     return chat_tools
+
+
+# Backward-compatible aliases
+mcp_to_openai = mcp_to_openai_responses
+mcp_to_openai_chat = mcp_to_openai_completions
 
 
 def mcp_to_gemini(mcp_tools: list) -> list[dict[str, Any]]:

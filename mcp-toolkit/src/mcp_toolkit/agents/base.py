@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
     from mcp_toolkit.clients.multi import MultiServerClient
 
-from mcp_toolkit.converters import mcp_to_openai_chat
+from mcp_toolkit.converters import mcp_to_openai_completions
 
 
 class BaseAgent:
@@ -110,7 +110,7 @@ class BaseAgent:
                 tool_names.update(self._mcp.get_tools_by_server(server))
             raw_tools = [t for t in self._mcp.all_tools if t.name in tool_names]
 
-        self._tools = mcp_to_openai_chat(raw_tools)
+        self._tools = mcp_to_openai_completions(raw_tools)
 
     @property
     def tool_names(self) -> list[str]:

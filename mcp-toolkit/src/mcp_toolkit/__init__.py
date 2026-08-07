@@ -13,6 +13,8 @@ from mcp_toolkit.converters import (
     mcp_to_gemini,
     mcp_to_openai,
     mcp_to_openai_chat,
+    mcp_to_openai_completions,
+    mcp_to_openai_responses,
 )
 from mcp_toolkit.config import MCPConfig, MCPServerConfig, load_config, load_config_from_dict
 from mcp_toolkit.transports import connect
@@ -23,10 +25,13 @@ __version__ = "0.1.0"
 __all__ = [
     # Converters
     "clean_schema",
-    "mcp_to_openai",
-    "mcp_to_openai_chat",
+    "mcp_to_openai_responses",
+    "mcp_to_openai_completions",
     "mcp_to_gemini",
     "mcp_to_anthropic",
+    # Backward-compat aliases
+    "mcp_to_openai",
+    "mcp_to_openai_chat",
     # Config
     "MCPConfig",
     "MCPServerConfig",

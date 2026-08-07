@@ -99,7 +99,7 @@ class GeminiMCPClient(BaseMCPClient):
         ]
 
         while True:
-            response = self._genai_client.models.generate_content(
+            response = await self._genai_client.aio.models.generate_content(
                 model=self.model,
                 contents=contents,
                 config=types.GenerateContentConfig(

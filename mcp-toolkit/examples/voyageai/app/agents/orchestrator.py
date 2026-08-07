@@ -14,6 +14,7 @@ Architecture:
 
 import asyncio
 import json
+from contextlib import AsyncExitStack
 from openai import AsyncOpenAI
 
 from mcp_toolkit.clients.multi import MultiServerClient
@@ -72,12 +73,14 @@ class TravelOrchestrator:
         self._mcp_client: MultiServerClient | None = None
         self._openai: AsyncOpenAI | None = None
         self._agents: dict[str, BaseAgent] = {}
+        self._exit_stack: AsyncExitStack | None = None
 
     async def initialize(self) -> None:
         """Connect to all MCP servers and set up specialist agents."""
+        self._exit_stack = AsyncExitStack()
         config = get_mcp_config()
         client = MultiServerClient(config, api_key=OPENAI_API_KEY)
-        self._mcp_client = await client.__aenter__()
+        self._mcp_client = await self._exit_stack.enter_async_context(client)
         self._openai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
         # Create specialist agents (all share the same MCP + OpenAI clients)
@@ -91,8 +94,9 @@ class TravelOrchestrator:
 
     async def close(self) -> None:
         """Disconnect from all servers."""
-        if self._mcp_client:
-            await self._mcp_client.__aexit__(None, None, None)
+        if self._exit_stack:
+            await self._exit_stack.aclose()
+            self._exit_stack = None
             self._mcp_client = None
 
     async def chat(self, user_message: str, history: list[dict] = None) -> str:

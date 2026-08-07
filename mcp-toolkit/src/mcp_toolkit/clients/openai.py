@@ -12,7 +12,7 @@ import os
 from typing import Any
 
 from mcp_toolkit.clients.base import BaseMCPClient, _extract_tool_text
-from mcp_toolkit.converters import mcp_to_openai
+from mcp_toolkit.converters import mcp_to_openai_completions
 
 
 class OpenAIMCPClient(BaseMCPClient):
@@ -54,14 +54,14 @@ class OpenAIMCPClient(BaseMCPClient):
             )
 
         try:
-            from openai import OpenAI
+            from openai import AsyncOpenAI
         except ImportError as e:
             raise ImportError(
                 "OpenAI client requires the 'openai' extra. "
                 "Install with: pip install 'mcp-toolkit[openai]'"
             ) from e
 
-        self._openai = OpenAI(api_key=resolved_key)
+        self._openai = AsyncOpenAI(api_key=resolved_key)
 
     async def chat(self, message: str) -> str:
         """Send a message and get a response with automatic tool execution.
@@ -78,51 +78,40 @@ class OpenAIMCPClient(BaseMCPClient):
         Returns:
             The model's final text response.
         """
-        tools = mcp_to_openai(self._mcp_tools)
-        input_list: list[dict[str, Any]] = [
-            {"role": "developer", "content": self.system_prompt},
+        tools = mcp_to_openai_completions(self._mcp_tools)
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": message},
         ]
 
         while True:
-            response = self._openai.responses.create(
+            response = await self._openai.chat.completions.create(
                 model=self.model,
                 tools=tools,
-                input=input_list,
+                messages=messages,
                 temperature=self.temperature,
             )
 
-            tool_calls_found = False
+            msg = response.choices[0].message
 
-            for item in response.output:
-                item_type = getattr(item, "type", None)
+            if not msg.tool_calls:
+                return msg.content or ""
 
-                if item_type == "reasoning":
-                    input_list.append(item.model_dump())
-                    continue
+            messages.append(msg.model_dump())
 
-                if item_type == "function_call":
-                    tool_calls_found = True
-                    tool_name = item.name
-                    try:
-                        tool_args = json.loads(item.arguments or "{}")
-                    except (json.JSONDecodeError, TypeError):
-                        tool_args = {}
+            for tc in msg.tool_calls:
+                try:
+                    tool_args = json.loads(tc.function.arguments or "{}")
+                except (json.JSONDecodeError, TypeError):
+                    tool_args = {}
 
-                    input_list.append(item.model_dump())
+                try:
+                    result = await self.call_tool(tc.function.name, tool_args)
+                except Exception as e:
+                    result = f"Error: {e}"
 
-                    # Execute tool via MCP
-                    try:
-                        result = await self.call_tool(tool_name, tool_args)
-                        output_payload = json.dumps({"result": result})
-                    except Exception as e:
-                        output_payload = json.dumps({"error": str(e)})
-
-                    input_list.append({
-                        "type": "function_call_output",
-                        "call_id": item.call_id,
-                        "output": output_payload,
-                    })
-
-            if not tool_calls_found:
-                return response.output_text or ""
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
