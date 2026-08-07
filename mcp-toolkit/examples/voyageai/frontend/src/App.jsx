@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import Sidebar from './components/Sidebar'
+import { useState } from 'react'
 import TripForm from './components/TripForm'
 import AgentCard from './components/AgentCard'
 import ResultsView from './components/ResultsView'
@@ -8,20 +7,9 @@ const ALL_AGENTS = ['weather', 'flights', 'hotels', 'currency']
 
 export default function App() {
   const [screen, setScreen] = useState('form')   // 'form' | 'loading' | 'results'
-  const [sessions, setSessions] = useState([])
   const [sessionId, setSessionId] = useState(null)
   const [tripForm, setTripForm] = useState(null)  // submitted form data
   const [planData, setPlanData] = useState(null)  // API response
-
-  useEffect(() => { loadSessions() }, [])
-
-  async function loadSessions() {
-    try {
-      const resp = await fetch('/sessions')
-      const data = await resp.json()
-      setSessions(data.sessions || [])
-    } catch { /* ignore */ }
-  }
 
   function startNewTrip() {
     setSessionId(null)
@@ -47,7 +35,6 @@ export default function App() {
       if (data.session_id) setSessionId(data.session_id)
       setPlanData(data)
       setScreen('results')
-      await loadSessions()
     } catch (err) {
       alert(`Error: ${err.message}`)
       setScreen('form')
@@ -66,13 +53,6 @@ export default function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar
-        sessions={sessions}
-        currentSessionId={sessionId}
-        onSelectSession={startNewTrip}
-        onNewChat={startNewTrip}
-      />
-
       <main className="main-area">
         {screen === 'form' && (
           <TripForm onSubmit={handlePlan} loading={false} />
