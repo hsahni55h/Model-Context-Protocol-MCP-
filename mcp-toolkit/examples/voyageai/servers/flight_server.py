@@ -20,7 +20,7 @@ server = FastMCP(
     instructions="Flight search and airport info powered by AviationStack API",
 )
 
-AVIATIONSTACK_BASE = "https://api.aviationstack.com/v1"
+AVIATIONSTACK_BASE = "http://api.aviationstack.com/v1"  # free tier: HTTP only
 
 
 def _get_api_key() -> str:
