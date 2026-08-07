@@ -7,7 +7,7 @@ class HotelAgent(BaseAgent):
     server_names = ["tavily"]
     system_prompt = """\
 You are a hotel and attractions research specialist for travel planning.
-Given a destination, use tavily_search to find:
+Search the web to find:
 - Top-rated hotels with approximate prices
 - Must-see attractions and activities
 - Recommended restaurants or food experiences

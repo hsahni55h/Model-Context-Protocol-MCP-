@@ -1,19 +1,17 @@
 """VoyageAI Orchestrator Agent.
 
-Coordinates travel planning by running specialized agents in parallel,
+Coordinates travel planning by running all specialist agents in parallel,
 then synthesizing their results into a coherent response.
 
 Architecture:
-    User query → Orchestrator parses intent
-                → WeatherAgent  ┐
-                → FlightAgent   │ asyncio.gather (parallel)
-                → HotelAgent    │
-                → CurrencyAgent ┘
+    User query → WeatherAgent  ┐
+                → FlightAgent  │ asyncio.gather (parallel)
+                → HotelAgent   │
+                → CurrencyAgent┘
                 → Planner synthesizes all results → final response
 """
 
 import asyncio
-import json
 from contextlib import AsyncExitStack
 from openai import AsyncOpenAI
 
@@ -26,26 +24,6 @@ from app.agents.flight import FlightAgent
 from app.agents.hotel import HotelAgent
 from app.agents.currency import CurrencyAgent
 
-SYSTEM_PROMPT = """\
-You are VoyageAI, an expert travel planning assistant.
-You coordinate multiple specialist agents to plan trips.
-
-Given a user's travel query, determine what information is needed and
-create specific task descriptions for your specialist agents:
-- Weather: destination weather and forecast
-- Flights: flight routes and airport info
-- Hotels: accommodation and attractions
-- Currency: exchange rates and budget conversion
-
-Respond ONLY with a JSON object (no markdown, no code fences) containing
-task descriptions for relevant agents. Use null for agents not needed.
-
-Example: {"weather": "Check weather in Tokyo for next week",
-          "flights": "Find flights from London to Tokyo",
-          "hotels": "Find hotels and attractions in Tokyo",
-          "currency": "Convert 2000 GBP to JPY"}
-"""
-
 PLANNER_PROMPT = """\
 You are VoyageAI, an expert travel planner. You've received research from
 specialist agents. Synthesize their findings into a clear, well-organized
@@ -55,15 +33,18 @@ Structure your response with clear sections. Be helpful and concise.
 If some research returned errors or no data, acknowledge it gracefully
 and work with what you have."""
 
+PLAN_PROMPT = """\
+You are VoyageAI, an expert travel planner. Research from specialist agents is below.
+Create a concise, practical travel itinerary using that research.
 
-class _GeneralistAgent(BaseAgent):
-    """Fallback agent with access to all tools, for simple or unclassified queries."""
+Use markdown with these sections:
+## ✈️ Trip Overview
+## 📅 Suggested Day-by-Day Plan
+## 🌤 Weather & What to Pack
+## 💰 Budget Tips
 
-    server_names: list[str] = []
-    system_prompt = (
-        "You are VoyageAI, a travel planning assistant. "
-        "Use your tools to help the user."
-    )
+Be specific and practical. If some research is missing, note it briefly and continue.
+"""
 
 
 class TravelOrchestrator:
@@ -89,7 +70,6 @@ class TravelOrchestrator:
             "flights": FlightAgent(self._mcp_client, self._openai),
             "hotels": HotelAgent(self._mcp_client, self._openai),
             "currency": CurrencyAgent(self._mcp_client, self._openai),
-            "generalist": _GeneralistAgent(self._mcp_client, self._openai),
         }
 
     async def close(self) -> None:
@@ -100,46 +80,15 @@ class TravelOrchestrator:
             self._mcp_client = None
 
     async def chat(self, user_message: str, history: list[dict] = None) -> str:
-        """Process a user message using parallel specialist agents.
-
-        Flow:
-            1. Parse user intent → create agent task descriptions
-            2. Run relevant agents in parallel
-            3. Synthesize results into final response
-        """
+        """Process a user message using all specialist agents in parallel."""
         if not self._mcp_client or not self._openai:
             raise RuntimeError("Orchestrator not initialized.")
 
-        # Step 1: Parse intent — ask LLM to create agent tasks
-        tasks = await self._parse_intent(user_message, history)
-
-        # If we couldn't parse structured tasks, fall back to generalist agent
-        if not tasks:
-            return await self._agents["generalist"].run(user_message, history)
-
-        # Step 2: Run agents in parallel
+        # Run all agents in parallel — each agent's system_prompt focuses it on its domain
+        tasks = {name: user_message for name in ("weather", "flights", "hotels", "currency")}
         results = await self._run_agents(tasks)
 
-        # Step 3: Synthesize into final response
         return await self._synthesize(user_message, results, history)
-
-    async def _parse_intent(self, message: str, history: list[dict] = None) -> dict | None:
-        """Use LLM to parse user intent into agent task descriptions."""
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": message})
-
-        response = await self._openai.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=messages,
-        )
-
-        content = response.choices[0].message.content or ""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return None
 
     async def _run_agents(self, tasks: dict) -> dict[str, str]:
         """Run specialist agents in parallel for the given tasks."""
@@ -280,21 +229,6 @@ class TravelOrchestrator:
             ],
         )
         return response.choices[0].message.content or ""
-
-
-
-PLAN_PROMPT = """\
-You are VoyageAI, an expert travel planner. Research from specialist agents is below.
-Create a concise, practical travel itinerary using that research.
-
-Use markdown with these sections:
-## ✈️ Trip Overview
-## 📅 Suggested Day-by-Day Plan
-## 🌤 Weather & What to Pack
-## 💰 Budget Tips
-
-Be specific and practical. If some research is missing, note it briefly and continue.
-"""
 
 
 
