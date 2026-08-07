@@ -9,7 +9,9 @@
 
 ## What is this?
 
-MCP Toolkit gives you **pre-built, configurable components** for the [Model Context Protocol](https://modelcontextprotocol.io/) — so you can wire any LLM to any MCP server in a few lines of code instead of writing boilerplate from scratch.
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is an open standard that lets LLMs call external tools — APIs, databases, file systems, or any custom logic — in a structured way.
+
+MCP Toolkit gives you **pre-built, configurable components** so you can connect any LLM to any MCP server in a few lines of code instead of writing connection management, tool discovery, and tool-calling loops from scratch.
 
 ```python
 from mcp_toolkit.clients import OpenAIMCPClient
@@ -19,98 +21,266 @@ async with OpenAIMCPClient(server_script="my_server.py") as client:
     print(response)
 ```
 
-That's it. The client handles connection, tool discovery, the full tool-calling loop, and cleanup automatically.
+That one block handles: launching the server subprocess, establishing the MCP session, discovering all available tools, sending your message to the LLM with those tools attached, executing any tool calls the LLM requests, feeding results back, and repeating until a final answer is produced. All you write is the `async with` block.
+
+---
+
+## Table of Contents
+
+1. [Installation](#installation)
+2. [30-Second Quick Start](#30-second-quick-start)
+3. [Core Concepts](#core-concepts)
+4. [Module Reference](#module-reference)
+   - [clients](#mcp_toolkitclients)
+   - [agents](#mcp_toolkitagents)
+   - [converters](#mcp_toolkitconverters)
+   - [config](#mcp_toolkitconfig)
+   - [transports](#mcp_toolkittransports)
+   - [server](#mcp_toolkitserver)
+5. [Building an MCP Server](#building-an-mcp-server)
+6. [Configuration Reference](#configuration-reference)
+7. [Examples](#examples)
+8. [Project Structure](#project-structure)
+9. [Running Tests](#running-tests)
 
 ---
 
 ## Installation
 
 ```bash
-# Core (converters, config, transport abstraction)
+# Core only (converters, config, transports — no LLM provider)
 pip install mcp-toolkit
 
-# With your preferred LLM provider
-pip install "mcp-toolkit[openai]"      # OpenAI
+# With your LLM provider
+pip install "mcp-toolkit[openai]"      # OpenAI (gpt-4o, gpt-4o-mini, etc.)
 pip install "mcp-toolkit[gemini]"      # Google Gemini
 pip install "mcp-toolkit[anthropic]"   # Anthropic Claude
 pip install "mcp-toolkit[langchain]"   # LangChain + LangGraph agent
 
-# Everything
+# Everything at once
 pip install "mcp-toolkit[all]"
 ```
 
-Or install from source (recommended for development):
+**From source (recommended for development or running examples):**
+
 ```bash
-cd mcp-toolkit
+git clone https://github.com/hsahni55h/Model-Context-Protocol-MCP-.git
+cd Model-Context-Protocol-MCP-/mcp-toolkit
 pip install -e ".[all,dev]"
 ```
 
 ---
 
-## Quick Start
+## 30-Second Quick Start
 
-### 1. OpenAI
+The toolkit ships with a zero-config demo server (`examples/quickstarts/demo_server.py`) so you can verify your install immediately — no API keys, no external services needed for the server side.
+
+```bash
+cd mcp-toolkit
+pip install -e ".[openai]"
+export OPENAI_API_KEY=sk-...
+
+# Run the interactive demo — no extra arguments needed
+python examples/quickstarts/quickstart_openai.py
+```
+
+```
+MCP Client ready! Tools: ['echo', 'add', 'greet']
+You: add 15 and 27
+Assistant: The result is 42.
+You: greet Himanshu
+Assistant: Hello, Himanshu! Welcome to MCP Toolkit.
+You: quit
+```
+
+Once that works, replace `demo_server.py` with your own:
+
+```bash
+python examples/quickstarts/quickstart_openai.py path/to/your_server.py
+```
+
+---
+
+## Core Concepts
+
+Before diving into the API, here are the three things worth understanding:
+
+### 1. Transport = how the client talks to the server
+
+MCP supports three transports. The toolkit handles all of them automatically:
+
+| Transport | When to use | Example |
+|-----------|-------------|---------|
+| **stdio** | Local server scripts you run as a subprocess | `server_script="weather.py"` |
+| **SSE** | Self-hosted HTTP servers | `server_url="http://localhost:8000/sse"` |
+| **streamable_http** | Hosted MCP services (Tavily, etc.) | `url` + `"transport": "streamable_http"` in config |
+
+The client auto-detects the transport from what you provide — you rarely need to specify it explicitly.
+
+### 2. The tool-calling loop
+
+Every client runs this loop automatically inside `chat()`:
+
+```
+You send a message
+    → LLM decides which tool(s) to call
+    → Client executes those tools via MCP
+    → Results fed back to LLM
+    → LLM decides: call more tools, or answer?
+    → Loop until final text answer
+    → Return the answer to you
+```
+
+### 3. Single server vs. multi-server
+
+- **Single server** (`OpenAIMCPClient`, `GeminiMCPClient`, etc.) — connect to one MCP server, chat with the LLM using those tools.
+- **Multi-server** (`MultiServerClient`) — connect to N servers at once. The LLM can call any tool from any server. Tool routing is handled automatically.
+- **Multi-agent** (`BaseAgent` + `MultiServerClient`) — connect N servers, then give each specialist agent a filtered subset of tools. Agents can run in parallel.
+
+---
+
+## Module Reference
+
+### `mcp_toolkit.clients`
+
+Pre-built, ready-to-use clients for every major LLM provider. Each one:
+- Manages the server connection lifecycle (connect on enter, disconnect on exit)
+- Discovers all available tools on connection
+- Runs the full tool-calling loop inside `chat()`
+- Provides `chat_loop()` for interactive terminal sessions
+
+#### Available clients
+
+| Class | Provider | Notes |
+|-------|----------|-------|
+| `OpenAIMCPClient` | OpenAI | Chat Completions API (`gpt-4o-mini` default) |
+| `GeminiMCPClient` | Google Gemini | `gemini-2.0-flash-001` default |
+| `AnthropicMCPClient` | Anthropic Claude | `claude-sonnet-4-20250514` default |
+| `LangChainMCPClient` | OpenAI via LangGraph | React agent; needs `langchain` extra |
+| `MultiServerClient` | OpenAI | Aggregates tools from N servers |
+
+#### Connection options (all single-server clients)
+
+All clients accept the same three ways to specify a server. Use whichever fits your setup:
+
+```python
+from mcp_toolkit.clients import OpenAIMCPClient
+
+# Option 1 — stdio: path to a local server script
+# The interpreter is auto-detected: .py → python, .js → node, .ts → npx
+async with OpenAIMCPClient(server_script="my_server.py") as client:
+    ...
+
+# Option 2 — SSE: an HTTP endpoint
+async with OpenAIMCPClient(server_url="http://localhost:8000/sse") as client:
+    ...
+
+# Option 3 — MCPServerConfig object (useful for programmatic setup)
+from mcp_toolkit.config import MCPServerConfig
+cfg = MCPServerConfig(name="weather", command="python", args=["weather_server.py"])
+async with OpenAIMCPClient(server_config=cfg) as client:
+    ...
+```
+
+#### OpenAI example
 
 ```python
 import asyncio
 from mcp_toolkit.clients import OpenAIMCPClient
 
 async def main():
-    async with OpenAIMCPClient(server_script="weather_server.py") as client:
-        print(await client.chat("Compare weather in London and Tokyo"))
+    async with OpenAIMCPClient(
+        server_script="weather_server.py",
+        model="gpt-4o-mini",       # optional, this is the default
+        system_prompt="You are a helpful travel weather assistant.",
+        temperature=0,             # optional, default 0
+    ) as client:
+        # Single question
+        answer = await client.chat("What's the weather like in Tokyo right now?")
+        print(answer)
+
+        # Interactive terminal loop
+        await client.chat_loop()
 
 asyncio.run(main())
 ```
 
-### 2. Google Gemini
+#### Gemini example
 
 ```python
 from mcp_toolkit.clients import GeminiMCPClient
 
-async with GeminiMCPClient(server_script="weather_server.py") as client:
-    print(await client.chat("What's the forecast for Sydney?"))
+async with GeminiMCPClient(
+    server_script="weather_server.py",
+    model="gemini-2.0-flash-001",
+) as client:
+    print(await client.chat("Will it rain in Sydney this weekend?"))
 ```
 
-### 3. Anthropic Claude
+#### Anthropic Claude example
 
 ```python
 from mcp_toolkit.clients import AnthropicMCPClient
 
-async with AnthropicMCPClient(server_script="weather_server.py") as client:
-    print(await client.chat("Is it raining in Berlin?"))
+async with AnthropicMCPClient(
+    server_script="weather_server.py",
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+) as client:
+    print(await client.chat("What should I pack for a trip to London in January?"))
 ```
 
-### 4. LangChain Agent
+#### LangChain example
 
 ```python
 from mcp_toolkit.clients import LangChainMCPClient
 
+# Uses LangGraph's React agent under the hood
+# Requires: pip install "mcp-toolkit[langchain]"
 async with LangChainMCPClient(server_script="server.py") as client:
-    print(await client.chat("Summarize the file and answer my question"))
+    print(await client.chat("Summarize the README file and list action items"))
 ```
 
-### 5. Multiple Servers
+#### `MultiServerClient` — connecting multiple servers at once
+
+The most powerful client. Connect to N servers simultaneously; all their tools are aggregated into a single pool and the LLM can call any of them.
 
 ```python
+import asyncio
 from mcp_toolkit.clients import MultiServerClient
 
-async with MultiServerClient.from_config("mcp_servers.json") as client:
-    # The model can call tools from ANY connected server
-    print(await client.chat("What's 2+2 and what's the weather in NYC?"))
+async def main():
+    # From a JSON config file (recommended)
+    async with MultiServerClient.from_config("mcp_servers.json") as mcp:
+
+        print(mcp.server_names)            # ['weather', 'math', 'flights']
+        print(mcp.tool_names)              # ['get_weather', 'add', 'search_flights', ...]
+        print(mcp.get_tools_by_server("weather"))  # ['get_weather', 'get_forecast']
+
+        # The LLM can call tools from any server automatically
+        answer = await mcp.chat(
+            "What's 15% of 340, and what's the weather in the cheapest city to fly to from NYC?"
+        )
+        print(answer)
+
+asyncio.run(main())
 ```
 
-`mcp_servers.json` format:
+**`mcp_servers.json` format:**
+
 ```json
 {
   "mcpServers": {
     "weather": {
       "command": "python",
-      "args": ["weather_server.py"],
-      "env": { "API_KEY": "${OPENWEATHER_API_KEY}" }
+      "args": ["servers/weather_server.py"],
+      "env": {
+        "OPENWEATHER_API_KEY": "${OPENWEATHER_API_KEY}"
+      }
     },
     "math": {
       "command": "python",
-      "args": ["math_server.py"]
+      "args": ["servers/math_server.py"]
     },
     "tavily": {
       "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}",
@@ -120,11 +290,47 @@ async with MultiServerClient.from_config("mcp_servers.json") as client:
 }
 ```
 
-> **`${VAR}` placeholders** in `url` and `env` values are automatically resolved from environment variables when the config is loaded.
+> **`${VAR}` placeholders** in `url` and `env` values are automatically substituted from environment variables when the config is loaded. Unset variables are replaced with an empty string.
 
-### 6. Multi-Agent Pattern
+You can also build the client from a Python dict without a file:
 
-Build specialized agents — each owning a subset of tools — that run in parallel:
+```python
+async with MultiServerClient.from_dict({
+    "weather": {"command": "python", "args": ["weather_server.py"]},
+    "math":    {"command": "python", "args": ["math_server.py"]},
+}) as mcp:
+    ...
+```
+
+---
+
+### `mcp_toolkit.agents`
+
+`BaseAgent` is a reusable base class for building **specialist agents** on top of `MultiServerClient`. Each agent gets its own system prompt and a filtered view of tools — only the tools from its designated servers.
+
+This is the pattern used by the VoyageAI example where `WeatherAgent`, `FlightAgent`, `HotelAgent`, and `CurrencyAgent` all share the same MCP connection but operate independently.
+
+#### Defining agents
+
+```python
+from mcp_toolkit.agents import BaseAgent
+
+class WeatherAgent(BaseAgent):
+    server_names = ["weather"]       # only sees tools from the 'weather' server
+    system_prompt = """You are a weather research specialist.
+    Always include temperature, conditions, and a brief forecast."""
+    max_tool_rounds = 5              # optional; default is 10
+
+class FlightAgent(BaseAgent):
+    server_names = ["flights"]
+    system_prompt = "You are a flight search specialist. Find the best routes."
+
+class GeneralistAgent(BaseAgent):
+    server_names = []                # empty = access to ALL tools from all servers
+    system_prompt = "You are a helpful assistant with many tools available."
+```
+
+#### Running agents
 
 ```python
 import asyncio
@@ -132,203 +338,88 @@ from openai import AsyncOpenAI
 from mcp_toolkit.clients import MultiServerClient
 from mcp_toolkit.agents import BaseAgent
 
-class WeatherAgent(BaseAgent):
-    server_names = ["weather"]
-    system_prompt = "You are a weather research specialist."
-
-class FlightAgent(BaseAgent):
-    server_names = ["flights"]
-    system_prompt = "You are a flight search specialist."
+# Define agents (as above)
 
 async def main():
     openai_client = AsyncOpenAI()
+
     async with MultiServerClient.from_config("mcp_servers.json") as mcp:
         weather = WeatherAgent(mcp, openai_client)
         flights = FlightAgent(mcp, openai_client)
 
-        # Run in parallel
+        # Run a single agent
+        result = await weather.run("What's the weather in Tokyo next week?")
+        print(result)
+
+        # Run multiple agents in parallel (asyncio.gather)
         weather_result, flight_result = await asyncio.gather(
-            weather.run("Weather in Tokyo next week?"),
-            flights.run("Flights from London to Tokyo?"),
+            weather.run("Weather forecast for Tokyo, 7 days"),
+            flights.run("Cheapest flights from London to Tokyo in July"),
         )
 
 asyncio.run(main())
 ```
 
-### 7. Low-Level Transport Access
+#### Multi-turn conversations
+
+Pass `history` to give an agent context from a previous exchange:
 
 ```python
-from mcp_toolkit import connect
+history = [
+    {"role": "user", "content": "I'm planning a trip to Tokyo in July."},
+    {"role": "assistant", "content": "Great choice! Tokyo in July is warm and humid..."},
+]
 
-async with connect(script="server.py") as session:
-    tools = await session.list_tools()
-    result = await session.call_tool("check_weather", {"city": "Paris"})
-```
-
----
-
-## Architecture
-
-```
-Your Application
-      │
-      ├── mcp_toolkit.clients         ← Pick your LLM provider
-      │     ├── OpenAIMCPClient        (openai.responses API)
-      │     ├── GeminiMCPClient        (google-genai)
-      │     ├── AnthropicMCPClient     (anthropic)
-      │     ├── LangChainMCPClient     (langgraph react agent)
-      │     └── MultiServerClient      (multiple servers, any LLM)
-      │
-      ├── mcp_toolkit.agents          ← Reusable agent boilerplate
-      │     └── BaseAgent              (OpenAI Chat Completions loop)
-      │
-      ├── mcp_toolkit.converters      ← Tool schema format conversion
-      │     ├── mcp_to_openai()        (Responses API format)
-      │     ├── mcp_to_openai_chat()   (Chat Completions format)
-      │     ├── mcp_to_gemini()        (FunctionDeclaration dicts)
-      │     ├── mcp_to_anthropic()     (Anthropic tool format)
-      │     └── clean_schema()         (strips 'title' fields)
-      │
-      ├── mcp_toolkit.config          ← Config loading
-      │     ├── load_config()          (JSON file + ${VAR} resolution)
-      │     ├── load_config_from_dict()
-      │     ├── MCPConfig
-      │     └── MCPServerConfig
-      │
-      ├── mcp_toolkit.transports      ← Low-level connection abstraction
-      │     └── connect()              (stdio / SSE / streamable_http)
-      │
-      └── mcp_toolkit.server          ← Server-side helpers
-            ├── load_env()             (auto-find .env file)
-            ├── openai_helper()        (quick OpenAI call in tools)
-            └── get_env_or_raise()     (env var with helpful errors)
-```
-
----
-
-## Modules
-
-### `mcp_toolkit.clients`
-
-Pre-built clients that handle the full tool-calling loop. Pick the one matching your LLM.
-
-| Class | Provider | Tool-call loop | Notes |
-|-------|----------|---------------|-------|
-| `OpenAIMCPClient` | OpenAI | ✅ Full loop | Uses Responses API |
-| `GeminiMCPClient` | Google Gemini | ✅ Full loop | Multi-round supported |
-| `AnthropicMCPClient` | Anthropic Claude | ✅ Full loop | Handles `tool_use` blocks |
-| `LangChainMCPClient` | OpenAI via LangGraph | ✅ React agent | Needs `langchain` extra |
-| `MultiServerClient` | OpenAI | ✅ Full loop | Aggregates N servers |
-
-All single-server clients accept the same connection options:
-
-```python
-# Option 1: stdio server (subprocess)
-async with OpenAIMCPClient(server_script="my_server.py") as client: ...
-
-# Option 2: SSE server (URL)
-async with OpenAIMCPClient(server_url="http://localhost:8000/sse") as client: ...
-
-# Option 3: From a config object
-from mcp_toolkit.config import MCPServerConfig
-cfg = MCPServerConfig(name="s", command="python", args=["server.py"])
-async with OpenAIMCPClient(server_config=cfg) as client: ...
-
-# Option 4: Interactive terminal loop
-async with OpenAIMCPClient(server_script="server.py") as client:
-    await client.chat_loop()
-```
-
-#### `MultiServerClient` — connecting multiple servers
-
-```python
-from mcp_toolkit.clients import MultiServerClient
-
-# From config file
-async with MultiServerClient.from_config("mcp_servers.json") as mcp:
-    print(mcp.server_names)   # ['weather', 'math', 'tavily']
-    print(mcp.tool_names)     # ['get_weather', 'add', 'tavily_search', ...]
-    print(mcp.all_tools)      # raw MCP tool objects (for converters)
-
-    # Tools are automatically routed to the correct server
-    result = await mcp.call_tool("get_weather", {"city": "Tokyo"})
-
-    # Get tool names for a specific server
-    weather_tools = mcp.get_tools_by_server("weather")
-
-# From a dict
-async with MultiServerClient.from_dict({
-    "weather": {"command": "python", "args": ["weather_server.py"]},
-    "math": {"command": "python", "args": ["math_server.py"]},
-}) as mcp: ...
-```
-
----
-
-### `mcp_toolkit.agents`
-
-Reusable `BaseAgent` class for building multi-agent applications on top of `MultiServerClient`.
-
-```python
-from mcp_toolkit.agents import BaseAgent
-
-class WeatherAgent(BaseAgent):
-    server_names = ["weather"]          # tools this agent can use
-    system_prompt = "You are a weather specialist."
-    max_tool_rounds = 5                 # optional, default 10
-
-class GeneralistAgent(BaseAgent):
-    # empty server_names → access to ALL tools
-    system_prompt = "You are a helpful assistant."
-```
-
-**How `BaseAgent` works:**
-1. On init, filters `mcp_client.all_tools` to tools from its `server_names`
-2. `run(query)` sends the query via OpenAI Chat Completions with those tools
-3. Executes any tool calls via `mcp_client.call_tool()` (auto-routed to the right server)
-4. Loops until the LLM produces a plain-text response
-5. Supports optional `history` parameter for multi-turn conversations
-
-```python
-# Pass conversation history for context
-result = await agent.run(
+result = await weather.run(
     "Should I pack an umbrella?",
-    history=[
-        {"role": "user", "content": "I'm going to Tokyo next week."},
-        {"role": "assistant", "content": "Tokyo in July is warm and humid..."},
-    ],
+    history=history,   # agent now knows the context
 )
 ```
+
+#### How `BaseAgent` works internally
+
+1. On `__init__`, it filters `mcp_client.all_tools` to only tools from its `server_names`
+2. `run(query)` builds a messages list: `[system, ...history, user_query]`
+3. Calls `openai.chat.completions.create()` with the filtered tool list
+4. If the LLM returns tool calls, executes each one via `mcp_client.call_tool()` (auto-routed to the right server)
+5. Appends tool results to the message history and loops
+6. Returns the first plain-text response
+7. If `max_tool_rounds` is hit, forces a final answer without tools (prevents infinite loops)
 
 ---
 
 ### `mcp_toolkit.converters`
 
-Convert MCP tool objects to the format expected by each LLM provider. All converters also call `clean_schema()` to strip `title` fields that many providers reject.
+Convert MCP tool objects to the schema format expected by each LLM provider's API. You need these when calling LLM APIs directly (e.g., when building a custom loop or a low-level integration).
 
 ```python
 from mcp_toolkit.converters import (
-    mcp_to_openai,       # Responses API  — openai.responses.create()
-    mcp_to_openai_chat,  # Chat API       — openai.chat.completions.create()
-    mcp_to_gemini,       # Gemini         — genai types.Tool(function_declarations=...)
-    mcp_to_anthropic,    # Claude         — client.messages.create(tools=...)
-    clean_schema,        # Schema cleaner — strips all 'title' keys recursively
+    mcp_to_openai_completions,  # OpenAI Chat Completions API
+    mcp_to_openai_responses,    # OpenAI Responses API
+    mcp_to_gemini,              # Google Gemini
+    mcp_to_anthropic,           # Anthropic Claude
+    clean_schema,               # strips 'title' fields from any JSON schema
 )
 ```
 
-#### Which OpenAI converter to use?
+All converters call `clean_schema()` internally, so you don't need to call it separately.
 
-| Converter | API call | Format |
-|-----------|----------|--------|
-| `mcp_to_openai()` | `openai.responses.create()` | `{"type": "function", "name": ..., "parameters": ...}` |
-| `mcp_to_openai_chat()` | `openai.chat.completions.create()` | `{"type": "function", "function": {"name": ..., ...}}` |
+#### OpenAI — which converter to use?
 
-Use `mcp_to_openai_chat()` for most real-world applications using `AsyncOpenAI`:
+OpenAI has two APIs with different tool formats:
+
+| Converter | API | Tool format |
+|-----------|-----|-------------|
+| `mcp_to_openai_completions()` | `openai.chat.completions.create()` | `{"type": "function", "function": {"name": ..., "parameters": ...}}` |
+| `mcp_to_openai_responses()` | `openai.responses.create()` | `{"type": "function", "name": ..., "parameters": ...}` |
+
+**Use `mcp_to_openai_completions()` for most applications** — the Chat Completions API is the standard, supported by every model, and what `BaseAgent`, `OpenAIMCPClient`, and `MultiServerClient` all use internally.
 
 ```python
-from mcp_toolkit.converters import mcp_to_openai_chat
+from mcp_toolkit.converters import mcp_to_openai_completions
 
-tools = mcp_to_openai_chat(mcp.all_tools)
+# In a custom tool-calling loop:
+tools = mcp_to_openai_completions(mcp.all_tools)
 response = await openai_client.chat.completions.create(
     model="gpt-4o",
     messages=messages,
@@ -336,135 +427,256 @@ response = await openai_client.chat.completions.create(
 )
 ```
 
+#### Gemini example
+
+```python
+from mcp_toolkit.converters import mcp_to_gemini
+from google.genai import types
+
+declarations = mcp_to_gemini(mcp_tools)
+gemini_tools = [types.Tool(function_declarations=declarations)]
+
+response = genai_client.models.generate_content(
+    model="gemini-2.0-flash-001",
+    contents=contents,
+    config=types.GenerateContentConfig(tools=gemini_tools),
+)
+```
+
+#### Anthropic example
+
+```python
+from mcp_toolkit.converters import mcp_to_anthropic
+
+tools = mcp_to_anthropic(mcp_tools)
+response = anthropic_client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    tools=tools,
+    messages=messages,
+)
+```
+
+#### `clean_schema()` — why it exists
+
+Pydantic and many JSON schema generators add a `"title"` field to every property (e.g., `"title": "City"`). Several LLM provider APIs reject schemas that include `title` keys. `clean_schema()` removes them recursively:
+
+```python
+from mcp_toolkit.converters import clean_schema
+
+raw = {
+    "title": "SearchInput",
+    "type": "object",
+    "properties": {
+        "query": {"title": "Query", "type": "string", "description": "Search query"}
+    }
+}
+
+cleaned = clean_schema(raw)
+# {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}}
+```
+
+Note: `clean_schema()` does **not** modify the input — it returns a new dict.
+
 ---
 
 ### `mcp_toolkit.config`
 
-Load and validate MCP server configurations from JSON files or dicts.
+Loads and validates MCP server configuration. Use this when you need to manage server definitions in code or a JSON file, or when building on top of `MultiServerClient` directly.
+
+#### Loading from a JSON file
 
 ```python
-from mcp_toolkit.config import load_config, load_config_from_dict, MCPServerConfig
+from mcp_toolkit.config import load_config
 
-# From a JSON file (auto-resolves ${VAR} placeholders in url and env)
+# Explicit path
 config = load_config("mcp_servers.json")
-# Falls back to $MCP_CONFIG env var, then mcp_servers.json in cwd
 
-# From a dict
-config = load_config_from_dict({
-    "mcpServers": {
-        "weather": {"command": "python", "args": ["server.py"]}
-    }
-})
-
-# Programmatic single server
-server = MCPServerConfig(
-    name="weather",
-    command="python",
-    args=["weather_server.py"],
-    env={"API_KEY": "abc123"},
-)
-print(server.transport)  # "stdio"
-
-# SSE server
-remote = MCPServerConfig(name="search", url="http://localhost:8000/sse")
-print(remote.transport)  # "sse"
-
-# Streamable HTTP (e.g. Tavily, hosted MCP services)
-tavily = MCPServerConfig(
-    name="tavily",
-    url="https://mcp.tavily.com/mcp/?tavilyApiKey=xxx",
-    transport_type="streamable_http",
-)
+# Auto-resolution order (no path given):
+# 1. $MCP_CONFIG environment variable
+# 2. mcp_servers.json in the current directory
+# 3. config.json in the current directory
+config = load_config()
 ```
 
-**`${VAR}` placeholder resolution** happens automatically in `load_config()`. Any `${ENV_VAR_NAME}` in `url` or `env` values is replaced with the corresponding environment variable:
+#### Loading from a dict
+
+```python
+from mcp_toolkit.config import load_config_from_dict
+
+config = load_config_from_dict({
+    "mcpServers": {
+        "weather": {"command": "python", "args": ["weather_server.py"]},
+        "search":  {"url": "http://localhost:9000/sse"},
+    }
+})
+```
+
+#### `MCPServerConfig` — programmatic server definition
+
+```python
+from mcp_toolkit.config import MCPServerConfig
+
+# Stdio server (local subprocess)
+stdio_server = MCPServerConfig(
+    name="weather",
+    command="python",
+    args=["servers/weather_server.py"],
+    env={"OPENWEATHER_API_KEY": "abc123"},  # passed to the subprocess
+)
+print(stdio_server.transport)  # "stdio"
+
+# SSE server (HTTP)
+sse_server = MCPServerConfig(
+    name="my-api",
+    url="http://localhost:8000/sse",
+)
+print(sse_server.transport)  # "sse" (auto-detected from url)
+
+# Streamable HTTP (modern hosted MCP services)
+remote_server = MCPServerConfig(
+    name="tavily",
+    url="https://mcp.tavily.com/mcp/?tavilyApiKey=xyz",
+    transport_type="streamable_http",  # must be explicit for streamable_http
+)
+print(remote_server.transport)  # "streamable_http"
+```
+
+**Transport auto-detection rules:**
+- `transport_type` set → uses that value exactly
+- `url` provided, no `transport_type` → `"sse"`
+- `command` provided, no `url` → `"stdio"`
+
+#### `${VAR}` placeholder resolution
+
+Any `${ENV_VAR_NAME}` in `url` or `env` values is automatically resolved from the environment when `load_config()` or `load_config_from_dict()` is called:
 
 ```json
 {
   "mcpServers": {
     "search": {
-      "url": "https://mcp.example.com/?key=${MY_API_KEY}",
+      "url": "https://mcp.example.com/?key=${SEARCH_API_KEY}",
       "transport": "streamable_http"
     },
     "myserver": {
       "command": "python",
       "args": ["server.py"],
-      "env": { "SECRET": "${MY_SECRET}" }
+      "env": { "DB_URL": "${DATABASE_URL}" }
     }
   }
 }
 ```
 
+Unset variables resolve to an empty string — your server code should validate required keys on startup (see `get_env_or_raise()` below).
+
 ---
 
 ### `mcp_toolkit.transports`
 
-Low-level connection abstraction. Use when you need direct `ClientSession` access without the full client wrapper.
+Low-level connection layer. Use this when you need direct access to the raw MCP `ClientSession` — for example, to call `session.list_tools()` or `session.call_tool()` without a full LLM client wrapper.
 
 ```python
 from mcp_toolkit import connect
 
-# stdio (subprocess)
-async with connect(script="server.py") as session:
-    tools = await session.list_tools()
-    result = await session.call_tool("my_tool", {"arg": "value"})
+# stdio — local script (interpreter auto-detected from extension)
+async with connect(script="my_server.py") as session:
+    # session is a fully-initialized mcp.ClientSession
+    response = await session.list_tools()
+    for tool in response.tools:
+        print(f"{tool.name}: {tool.description}")
+
+    result = await session.call_tool("get_weather", {"city": "Paris"})
+    print(result.content[0].text)
 
 # SSE
-async with connect(url="http://localhost:8000/sse") as session: ...
+async with connect(url="http://localhost:8000/sse") as session:
+    ...
 
-# Streamable HTTP
+# Streamable HTTP (from config object)
 from mcp_toolkit.config import MCPServerConfig
 cfg = MCPServerConfig(name="t", url="https://api.example.com/mcp", transport_type="streamable_http")
-async with connect(config=cfg) as session: ...
+async with connect(config=cfg) as session:
+    ...
 
 # Explicit command + args
-async with connect(command="python", args=["server.py"]) as session: ...
+async with connect(command="node", args=["server.js"]) as session:
+    ...
 ```
 
-Supported transports: `stdio` (subprocess), `sse` (HTTP + Server-Sent Events), `streamable_http` (modern HTTP MCP transport).
+The `connect()` function handles MCP session initialization (`session.initialize()`) before yielding, so the session is always ready to use inside the `async with` block.
 
 ---
 
 ### `mcp_toolkit.server`
 
-Utility helpers for building MCP servers.
+Utility helpers for building your MCP servers. These solve common boilerplate problems.
 
 ```python
 from mcp_toolkit.server import load_env, openai_helper, get_env_or_raise
+```
 
-# Auto-find and load .env from any parent directory
-# Useful in servers that are run from arbitrary working directories
-load_env()
+#### `load_env()` — find your `.env` file automatically
 
-# Quick OpenAI call inside your tool implementations
-# (e.g. for AI-powered summarization, extraction, classification)
-summary = openai_helper(
-    f"Summarize this job description: {text}",
-    system="You are a concise summarizer.",
-    model="gpt-4o-mini",
-    max_tokens=200,
-)
+When an MCP server is launched as a subprocess, its working directory might be different from where your `.env` file lives. `load_env()` solves this by walking up the directory tree until it finds a `.env` file:
 
-# Get a required env var with a helpful error message
-api_key = get_env_or_raise("MY_SERVICE_API_KEY")
+```python
+# my_server.py
+from mcp_toolkit.server import load_env
+
+load_env()  # finds .env anywhere up the directory tree — no path math needed
+```
+
+This replaces the common brittle pattern:
+```python
+# The old way — breaks if you move the file
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
+```
+
+#### `get_env_or_raise()` — required environment variables
+
+```python
+from mcp_toolkit.server import get_env_or_raise
+
+# Raises ValueError with a clear message if not set
+api_key = get_env_or_raise("OPENWEATHER_API_KEY")
+db_url   = get_env_or_raise("DATABASE_URL", "Add DATABASE_URL to your .env file")
+```
+
+#### `openai_helper()` — quick AI calls inside tool implementations
+
+When your MCP tool needs to call OpenAI for processing (summarization, extraction, classification), use this helper instead of repeating the client setup:
+
+```python
+from mcp_toolkit.server import openai_helper
+
+@mcp.tool()
+def summarize_document(text: str) -> str:
+    """Summarize a document using AI."""
+    return openai_helper(
+        f"Summarize this in 3 bullet points:\n\n{text}",
+        system="You are a concise summarizer.",
+        model="gpt-4o-mini",
+        max_tokens=200,
+    )
 ```
 
 > **Why only an OpenAI helper and not Gemini/Anthropic?**
 >
-> OpenAI's Python SDK ships a **synchronous** client (`openai.OpenAI`) that works like a regular function — no `await` needed. This makes it safe to wrap in a plain `def openai_helper(...)`.
+> OpenAI's Python SDK provides a **synchronous** client (`openai.OpenAI`) — no `await` needed — making it safe to call from a plain `def` function.
 >
-> Gemini and Anthropic's SDKs are **async-only** — they require `await`. You can't wrap them in a plain function because calling `asyncio.run()` inside an already-running async server crashes with `RuntimeError: This event loop is already running`.
+> Gemini and Anthropic are **async-only** — they require `await`. Calling `asyncio.run()` inside an already-running async MCP server crashes with `RuntimeError: This event loop is already running`.
 >
-> For Gemini or Anthropic inside a tool, just `await` the SDK directly — your MCP tool functions are already `async def`:
+> For those providers, use their async clients directly inside an `async def` tool:
 >
 > ```python
 > from anthropic import AsyncAnthropic
 >
-> client = AsyncAnthropic()
+> _client = AsyncAnthropic()
 >
 > @mcp.tool()
-> async def summarize(text: str) -> str:
->     response = await client.messages.create(
+> async def summarize_with_claude(text: str) -> str:
+>     """Summarize using Claude."""
+>     response = await _client.messages.create(
 >         model="claude-sonnet-4-20250514",
 >         max_tokens=200,
 >         messages=[{"role": "user", "content": f"Summarize: {text}"}],
@@ -474,28 +686,29 @@ api_key = get_env_or_raise("MY_SERVICE_API_KEY")
 
 ---
 
-## Building Your Own MCP Server
+## Building an MCP Server
 
-The toolkit works with **any** MCP server — you can build one using `FastMCP`:
+The toolkit works with **any** MCP server. Here's a complete example of a server that uses several toolkit helpers:
 
 ```python
-# my_server.py
-import os
+# product_server.py
 import httpx
 from mcp.server.fastmcp import FastMCP
-from mcp_toolkit.server import load_env, get_env_or_raise
+from mcp_toolkit.server import load_env, get_env_or_raise, openai_helper
 
-load_env()  # auto-finds .env file
+# Load .env from project root (wherever the server is run from)
+load_env()
 
-mcp = FastMCP("my-tools")
+mcp = FastMCP("product-tools")
+
 
 @mcp.tool()
 async def search_products(query: str, max_results: int = 5) -> str:
-    """Search our product catalog.
+    """Search the product catalog.
 
     Args:
-        query: Search query string
-        max_results: Maximum number of results to return (default 5)
+        query: Search query string.
+        max_results: Maximum number of results to return (default 5).
     """
     api_key = get_env_or_raise("CATALOG_API_KEY")
     async with httpx.AsyncClient() as client:
@@ -505,46 +718,65 @@ async def search_products(query: str, max_results: int = 5) -> str:
             headers={"Authorization": f"Bearer {api_key}"},
         )
         data = resp.json()
-    return "\n".join(f"- {p['name']}: ${p['price']}" for p in data["products"])
+
+    lines = [f"- {p['name']} (${p['price']}): {p['sku']}" for p in data["products"]]
+    return "\n".join(lines) if lines else "No products found."
+
+
+@mcp.tool()
+def summarize_product_reviews(product_id: str, reviews: str) -> str:
+    """Summarize customer reviews for a product.
+
+    Args:
+        product_id: The product SKU or ID.
+        reviews: Raw review text to summarize.
+    """
+    return openai_helper(
+        f"Summarize these customer reviews for product {product_id}:\n\n{reviews}",
+        system="You are a product analyst. Summarize reviews in 2-3 sentences covering sentiment, key positives, and key negatives.",
+        max_tokens=150,
+    )
+
 
 if __name__ == "__main__":
     mcp.run()
 ```
 
 Connect with any toolkit client:
+
 ```python
-async with OpenAIMCPClient(server_script="my_server.py") as client:
-    print(await client.chat("Find me a red jacket under $100"))
+async with OpenAIMCPClient(server_script="product_server.py") as client:
+    print(await client.chat("Find me a laptop under $800 and summarize its reviews"))
 ```
 
 ---
 
 ## Configuration Reference
 
-### Environment Variables
+### Required environment variables
 
-| Variable | Used by | Required for |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | OpenAI client, MultiServerClient, LangChain, `openai_helper()` | OpenAI features |
-| `GEMINI_API_KEY` | Gemini client | Gemini features |
-| `ANTHROPIC_API_KEY` | Anthropic client | Claude features |
-| `MCP_CONFIG` | `load_config()` | Alternative to explicit config path |
+| Variable | Provider / Component |
+|----------|----------------------|
+| `OPENAI_API_KEY` | `OpenAIMCPClient`, `MultiServerClient`, `LangChainMCPClient`, `BaseAgent`, `openai_helper()` |
+| `GEMINI_API_KEY` | `GeminiMCPClient` |
+| `ANTHROPIC_API_KEY` | `AnthropicMCPClient` |
+| `MCP_CONFIG` | `load_config()` — alternative to passing a file path |
 
-### All Client Options
+### Client constructor parameters
 
-All single-server clients share these base options:
+All single-server clients share these parameters (pass as keyword args):
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `server_script` | `str` | Path to a `.py` or `.js` server file (stdio) |
-| `server_url` | `str` | HTTP endpoint URL (SSE transport) |
-| `server_config` | `MCPServerConfig` | Pre-built config object |
-| `command` | `str` | Override the interpreter command |
-| `args` | `list[str]` | Override the command arguments |
-| `system_prompt` | `str` | LLM system prompt |
-| `model` | `str` | Model name (provider-specific defaults) |
-| `temperature` | `float` | Sampling temperature (default: `0`) |
-| `api_key` | `str` | API key override (falls back to env var) |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `server_script` | `str` | — | Path to a `.py`/`.js`/`.ts` server file (stdio) |
+| `server_url` | `str` | — | HTTP endpoint URL (SSE transport) |
+| `server_config` | `MCPServerConfig` | — | Pre-built config object |
+| `command` | `str` | auto-detected | Override the interpreter command |
+| `args` | `list[str]` | auto-detected | Override the command arguments |
+| `system_prompt` | `str` | `"You are a helpful assistant..."` | LLM system prompt |
+| `model` | `str` | provider default | Model name |
+| `temperature` | `float` | `0` | Sampling temperature |
+| `api_key` | `str` | from env var | API key override |
 
 Provider defaults:
 
@@ -556,16 +788,82 @@ Provider defaults:
 | `LangChainMCPClient` | `gpt-4o-mini` |
 | `MultiServerClient` | `gpt-4o-mini` |
 
-### `MCPServerConfig` Fields
+### `MCPServerConfig` fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | `str` | Human-readable server name |
-| `command` | `str` | Command to start the server (e.g. `"python"`, `"node"`) |
+| `command` | `str` | Command to run the server (`"python"`, `"node"`, `"uv"`) |
 | `args` | `list[str]` | Arguments to the command |
 | `env` | `dict[str, str]` | Environment variables for the subprocess |
-| `url` | `str` | HTTP endpoint for SSE / streamable_http |
-| `transport_type` | `str` | Explicit transport override: `"stdio"`, `"sse"`, or `"streamable_http"` |
+| `url` | `str` | HTTP endpoint for SSE or streamable_http |
+| `transport_type` | `str` | Explicit transport: `"stdio"`, `"sse"`, `"streamable_http"` |
+
+### `BaseAgent` class attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `server_names` | `list[str]` | `[]` | MCP server names whose tools this agent can use. Empty = all tools. |
+| `system_prompt` | `str` | `"You are a helpful assistant..."` | System prompt for the LLM |
+| `max_tool_rounds` | `int` | `10` | Max tool-calling iterations before forcing a final answer |
+
+---
+
+## Examples
+
+### Quickstarts (no server required)
+
+All quickstarts default to the bundled `demo_server.py` — run them with just an API key set:
+
+```bash
+cd mcp-toolkit
+pip install -e ".[all]"
+
+# Run with demo server (just set your API key)
+python examples/quickstarts/quickstart_openai.py
+python examples/quickstarts/quickstart_gemini.py
+python examples/quickstarts/quickstart_anthropic.py
+python examples/quickstarts/quickstart_langchain.py
+
+# Or point at your own server
+python examples/quickstarts/quickstart_openai.py path/to/your_server.py
+
+# Multi-server (needs mcp_servers.json in current directory)
+python examples/quickstarts/quickstart_multi.py
+
+# BaseAgent parallel pattern (needs mcp_servers.json)
+python examples/quickstarts/quickstart_agents.py
+
+# Low-level connect() demo
+python examples/quickstarts/direct_transport.py
+```
+
+### VoyageAI — full multi-agent showcase
+
+`examples/voyageai/` is a complete FastAPI web application that demonstrates the multi-agent pattern at production scale:
+
+- **4 specialist agents** — Weather, Flights, Hotels, Currency — each owning tools from their server
+- **Parallel execution** — all agents run simultaneously with `asyncio.gather()`
+- **Orchestrator** — parses user intent, dispatches to agents, synthesizes results
+- **React frontend** — built with Vite + React
+- **SQLite session store** — conversation history across page reloads
+
+```bash
+cd mcp-toolkit/examples/voyageai
+cp .env.example .env       # fill in your API keys
+pip install -e "../../.[all]"
+pip install fastapi uvicorn
+
+# Development (hot-reload backend + frontend)
+uvicorn app.main:app --reload        # Terminal 1
+cd frontend && npm install && npm run dev  # Terminal 2
+
+# Production (single server)
+cd frontend && npm run build
+cd .. && uvicorn app.main:app
+```
+
+See [`examples/voyageai/README.md`](examples/voyageai/README.md) for the full setup guide.
 
 ---
 
@@ -573,40 +871,50 @@ Provider defaults:
 
 ```
 mcp-toolkit/
-├── pyproject.toml                  # Package config + optional extras
+├── pyproject.toml                    # Package config and optional extras
 ├── README.md
+│
 ├── src/mcp_toolkit/
-│   ├── __init__.py                 # Top-level public API exports
-│   ├── converters.py               # mcp_to_openai, mcp_to_openai_chat,
-│   │                               #   mcp_to_gemini, mcp_to_anthropic, clean_schema
-│   ├── config.py                   # load_config, MCPServerConfig, MCPConfig
-│   │                               #   + ${VAR} env placeholder resolution
-│   ├── transports.py               # connect() — unified stdio/SSE/streamable_http
+│   ├── __init__.py                   # Top-level public API re-exports
+│   │
+│   ├── converters.py                 # mcp_to_openai_completions()
+│   │                                 # mcp_to_openai_responses()
+│   │                                 # mcp_to_gemini(), mcp_to_anthropic()
+│   │                                 # clean_schema()
+│   │
+│   ├── config.py                     # load_config(), load_config_from_dict()
+│   │                                 # MCPServerConfig, MCPConfig
+│   │                                 # ${VAR} placeholder resolution
+│   │
+│   ├── transports.py                 # connect() — stdio / SSE / streamable_http
+│   │
 │   ├── clients/
-│   │   ├── __init__.py             # Lazy-loaded client exports
-│   │   ├── base.py                 # BaseMCPClient — shared connection + call_tool logic
-│   │   ├── openai.py               # OpenAIMCPClient
-│   │   ├── gemini.py               # GeminiMCPClient
-│   │   ├── anthropic.py            # AnthropicMCPClient
-│   │   ├── langchain.py            # LangChainMCPClient
-│   │   └── multi.py                # MultiServerClient
+│   │   ├── base.py                   # BaseMCPClient — connection lifecycle, call_tool()
+│   │   ├── openai.py                 # OpenAIMCPClient
+│   │   ├── gemini.py                 # GeminiMCPClient
+│   │   ├── anthropic.py              # AnthropicMCPClient
+│   │   ├── langchain.py              # LangChainMCPClient
+│   │   └── multi.py                  # MultiServerClient
+│   │
 │   ├── agents/
-│   │   ├── __init__.py             # Exports BaseAgent
-│   │   └── base.py                 # BaseAgent — subclass with server_names +
-│   │                               #   system_prompt for a ready-made agent
+│   │   └── base.py                   # BaseAgent — subclass with server_names
+│   │                                 # + system_prompt for a ready-made agent
+│   │
 │   └── server/
-│       ├── __init__.py             # Exports server helpers
-│       └── helpers.py              # load_env, openai_helper, get_env_or_raise
+│       └── helpers.py                # load_env(), openai_helper(), get_env_or_raise()
+│
 ├── examples/
 │   ├── quickstarts/
-│   │   ├── quickstart_openai.py    # OpenAI interactive demo
-│   │   ├── quickstart_gemini.py    # Gemini interactive demo
-│   │   ├── quickstart_anthropic.py # Claude interactive demo
-│   │   ├── quickstart_langchain.py # LangChain interactive demo
-│   │   ├── quickstart_multi.py     # Multi-server interactive demo
-│   │   ├── quickstart_agents.py    # BaseAgent parallel agents demo
-│   │   └── direct_transport.py     # Low-level connect() demo
-│   └── voyageai/                   # Full showcase app (multi-agent travel planner)
+│   │   ├── demo_server.py            # Zero-config demo server (echo, add, greet)
+│   │   ├── quickstart_openai.py
+│   │   ├── quickstart_gemini.py
+│   │   ├── quickstart_anthropic.py
+│   │   ├── quickstart_langchain.py
+│   │   ├── quickstart_multi.py
+│   │   ├── quickstart_agents.py
+│   │   └── direct_transport.py
+│   └── voyageai/                     # Full multi-agent travel planner app
+│
 └── tests/
     ├── test_config.py
     ├── test_converters.py
@@ -615,67 +923,25 @@ mcp-toolkit/
 
 ---
 
-## Running the Examples
-
-```bash
-# Install the toolkit in dev mode first
-cd mcp-toolkit
-pip install -e ".[all,dev]"
-
-# Run any quickstart (from mcp-toolkit/ directory)
-python examples/quickstarts/quickstart_openai.py path/to/your_server.py
-python examples/quickstarts/quickstart_gemini.py path/to/your_server.py
-python examples/quickstarts/quickstart_anthropic.py path/to/your_server.py
-python examples/quickstarts/quickstart_langchain.py path/to/your_server.py
-
-# Multi-server (needs mcp_servers.json in cwd)
-python examples/quickstarts/quickstart_multi.py
-
-# BaseAgent parallel pattern
-python examples/quickstarts/quickstart_agents.py
-
-# Low-level transport
-python examples/quickstarts/direct_transport.py
-
-# Full showcase app
-cd examples/voyageai
-uvicorn app.main:app --reload
-```
-
----
-
-## Development
+## Running Tests
 
 ```bash
 cd mcp-toolkit
-pip install -e ".[all,dev]"
+pip install -e ".[dev]"
 
 # Run all tests
 pytest
 
-# Run with verbose output
+# Verbose output
 pytest -v
 
-# Run a specific module
+# Specific module
 pytest tests/test_converters.py -v
 pytest tests/test_config.py -v
 ```
 
 ---
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes with tests
-4. Run the test suite (`pytest`)
-5. Commit and push
-6. Open a Pull Request
-
----
-
 ## License
 
 MIT — see [LICENSE](../LICENSE) for details.
-
-
