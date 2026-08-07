@@ -2,7 +2,7 @@
 
 VoyageAI is a full-stack, multi-agent travel planning application built on top of [mcp-toolkit](../../README.md). It demonstrates how to connect multiple MCP servers with different transport types, run specialist AI agents in parallel, and synthesize their results into a coherent response — all wired together with a React frontend and a FastAPI backend.
 
-It is a real-world showcase of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) — not a toy example.
+It is a real-world showcase of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 
 
 ---
 
